@@ -40,7 +40,16 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.compose.ui.platform.LocalContext
+import android.content.Context
 import com.xinjigalaxy.knownotes.ui.AppViewModelProvider
+
+/**
+ * 「关于」里的版本号从包信息里读，别再写死 —— 之前一直显示 1.1.0-demo，跟实际装的版本对不上。
+ */
+private fun appVersion(context: Context): String = runCatching {
+    context.packageManager.getPackageInfo(context.packageName, 0).versionName
+}.getOrNull() ?: "?"
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -52,6 +61,7 @@ fun MoreScreen(
 ) {
     val stats by viewModel.stats.collectAsStateWithLifecycle()
     var showAbout by remember { mutableStateOf(false) }
+    val context = LocalContext.current
 
     Scaffold(
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
@@ -144,7 +154,7 @@ fun MoreScreen(
                 EntryCard(
                     icon = Icons.Outlined.Info,
                     title = "关于",
-                    subtitle = "KnowNote 1.1.0-demo（Material 3）",
+                    subtitle = "KnowNote ${appVersion(context)}（Material 3）",
                     onClick = { showAbout = true },
                 )
             }
@@ -157,7 +167,7 @@ fun MoreScreen(
             title = { Text("关于 KnowNote") },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Text("安卓零碎知识点记事本 · 1.1 demo")
+                    Text("安卓零碎知识点记事本 · ${appVersion(context)}")
                     HorizontalDivider()
                     Text("· Kotlin + Jetpack Compose + Material 3")
                     Text("· Room(SQLite) + 全文检索（FTS5 优先，降级 FTS4 / LIKE）")

@@ -3,11 +3,16 @@ package com.xinjigalaxy.knownotes
 import android.annotation.SuppressLint
 import android.app.Application
 import android.content.Context
+import android.os.Build
 import android.provider.Settings
 import com.xinjigalaxy.knownotes.data.db.AppDatabase
 import com.xinjigalaxy.knownotes.data.export.Exporter
 import com.xinjigalaxy.knownotes.data.prefs.UiPrefs
 import com.xinjigalaxy.knownotes.data.repo.NoteRepository
+import com.xinjigalaxy.knownotes.data.sync.SyncClient
+import com.xinjigalaxy.knownotes.data.sync.SyncCoordinator
+import com.xinjigalaxy.knownotes.data.sync.SyncEngine
+import com.xinjigalaxy.knownotes.data.sync.SyncServer
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -35,14 +40,28 @@ class AppContainer(context: Context) {
 
     val database: AppDatabase = AppDatabase.get(appContext)
     val deviceId: String = resolveDeviceId(appContext)
+    val deviceName: String = "${Build.MANUFACTURER} ${Build.MODEL}".trim()
     val uiPrefs = UiPrefs(appContext)
     val repository = NoteRepository(database, deviceId)
     val exporter = Exporter(appContext, repository)
+
+    /** 同步引擎与主机服务挂在**应用级**作用域上：切页面不该把主机服务带下线。 */
+    val syncEngine = SyncEngine(repository)
+    val syncServer = SyncServer(repository, syncEngine, deviceId, deviceName)
+    val syncClient = SyncClient(deviceId, deviceName)
+    val syncCoordinator = SyncCoordinator(repository, syncEngine, syncClient)
+
+    fun appScope(): CoroutineScope = scope
 
     init {
         scope.launch {
             // 触发首次打开：建表 → 建 FTS5 虚拟表 → 索引自愈，并落一条 sync_meta
             repository.ensureDeviceMeta()
+            // 上次退出前开着主机的话，这次进入应用时恢复监听（用户明确选过才算）
+            val key = uiPrefs.syncKey()
+            if (uiPrefs.hostAutoStart() && key.isNotBlank()) {
+                syncServer.start(scope, uiPrefs.hostPort(), key)
+            }
         }
     }
 
