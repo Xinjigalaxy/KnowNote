@@ -1,0 +1,25 @@
+# ---- Gradle / 构建产物 ----
+.gradle/
+build/
+app/build/
+.kotlin/
+captures/
+*.log
+
+# ---- 本机专属配置（含绝对路径，不入库） ----
+local.properties
+
+# ---- IDE ----
+.idea/
+*.iml
+*.hprof
+.DS_Store
+
+# ---- 手工留存的中间数据（数据库副本 / 演示灌库产物） ----
+seed/
+
+# 注意：以下内容**必须**入库，不要加进 ignore
+#   gradle/wrapper/gradle-wrapper.jar   —— 没有它 clone 下来跑不了 ./gradlew
+#   gradle/wrapper/gradle-wrapper.properties
+#   app/schemas/**                      —— Room 导出的 schema，迁移要靠它比对
+#   demo-shots/**                       —— README 引用的界面截图

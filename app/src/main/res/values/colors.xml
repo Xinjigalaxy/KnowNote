@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 初音绿：M3 seed color -->
+    <color name="ic_launcher_background">#39C5BB</color>
+    <color name="miku_teal">#39C5BB</color>
+</resources>
