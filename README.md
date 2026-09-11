@@ -114,19 +114,63 @@ unicode61 与 simple 分词器都把**连续汉字当成一个 token**，于是�
 
 索引条数与在线笔记数不一致时（升级、异常退出、外部灌库）自动整体重建。
 
+### 4. 千万别靠 `sqlite_master` 判断"虚拟表是否已存在"（v1.0.0 的实际 bug）
+
+Room 新建库时会**连续回调 `onCreate` 和 `onOpen`**，也就是同一个库里 `FtsStore.create()` 会被调用两次。
+v1.0.0 在第二次调用时去 `sqlite_master` 里找已有表：
+
+```kotlin
+// ❌ v1.0.0 的写法
+val ddl = db.query("SELECT sql FROM sqlite_master WHERE type='table' AND name=?", arrayOf("notes_fts"))
+if (ddl == null) { /* 去建表 —— 但表其实已经存在 */ }
+```
+
+在 SQLite 3.32（Android 12 / 13）上这次查询拿不到值，于是：
+
+1. 误判成"表不存在" → 重试建 FTS5 → 报 `table notes_fts already exists`
+2. 再试 FTS4 → 同样 `already exists`
+3. **已经建好的引擎被降级成 NONE，检索退化为 LIKE**
+
+实测复现（Android 13 / SQLite 3.32.2 模拟器）：
+
+```
+W KnowNote: 全文检索引擎 FTS5 不可用: table notes_fts already exists ...
+W KnowNote: 全文检索引擎 FTS4 不可用: table notes_fts already exists ...
+```
+
+**v1.0.1 的修法：完全按行为判定，不解析 DDL 文本，且探测/建表必须幂等**
+
+- 表已存在 → 用 `MATCH` 能不能过判断"模块在不在"，再用 `bm25()` 是否存在区分 FTS5 / FTS4
+- 模块可用性探测走 `temp.` 临时表，**绝不拿真表名试错**（失败的 CREATE 在部分版本会留下同名残留）
+- `create()` 可重复调用，第二次不得改变第一次的结论（回归测试 `repeatedProbeMustNotDowngradeTheEngine` 守住）
+- 索引条数与在线笔记数不一致就整体重建，兜住升级 / 崩溃 / 外部灌库等各种状态
+
+> 诚实说明：3.32 上"第一次建好的表为何没落盘"的 SQLite 内部原因我没能完全钉死（同连接立刻查
+> `sqlite_master` 在两版 SQLite 上都是可见的）。但 v1.0.1 已不依赖任何这些假设 ——
+> 不解析 DDL、不重试建表、模块探测隔离在 temp、条数不符即重建，所以各种中间状态都能收敛。
+
 ## 五、验证记录
 
 | 检查项 | 结果 |
 | --- | --- |
 | `:app:assembleDebug` / `assembleRelease` | BUILD SUCCESSFUL |
 | 单元测试 `FtsTextTest` | 8/8 通过 |
-| 仪器化测试 `FtsSearchTest`（Android 15 模拟器） | 7/7 通过 |
+| 仪器化测试 `FtsSearchTest`（Android 13 / SQLite 3.32.2） | 10/10 通过 |
+| 仪器化测试 `FtsSearchTest`（Android 15 / SQLite 3.44.3） | 10/10 通过 |
 | APK 元信息 | minSdk 26 / targetSdk 36 / 标签「知识点记事本」 |
 | Room schema 导出 | `app/schemas/…/1.json`，6 张表字段与需求文档 2.1 一致 |
-| 真机检索 | 中文子串「检索」命中 2 条、前缀 `gradle*` 命中 1 条、多词元 AND 命中正确 |
+| 真机检索（Android 15） | 中文子串「检索」命中 2 条、前缀 `gradle*` 命中 1 条、多词元 AND 命中正确 |
 | 索引自愈 | 灌库时索引 0 条 → 启动后 8 条，与在线笔记数一致 |
+| **升级路径自愈（Android 13 / SQLite 3.32.2）** | v1.0.0 造出降级状态 → 覆盖装 v1.0.1 → 引擎恢复 FTS4，`FTS 索引条数对不上（0 → 8），已整体重建`，MATCH 查询全部命中 |
 
 界面截图见 `demo-shots/`。
+
+## 五之二、版本记录
+
+| 版本 | 说明 |
+| --- | --- |
+| v1.0.0 | 首个可用版本（第一阶段全部功能） |
+| v1.0.1 | 修 FTS 引擎误判导致检索降级为 LIKE；新增「更多」页诊断信息（SQLite 版本 / 判定依据 / 探测结果），重复探测幂等 + 回归测试 |
 
 ## 六、下一步建议
 

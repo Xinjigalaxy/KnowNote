@@ -140,12 +140,19 @@ def main(path: str) -> None:
 
     db.commit()
 
+    def count_of(table: str) -> str:
+        # FTS 虚拟表可能尚未建立（例如设备不支持任何全文引擎），不作为错误
+        try:
+            return str(cur.execute(f"SELECT count(*) FROM {table}").fetchone()[0])
+        except sqlite3.OperationalError:
+            return "表不存在"
+
     counts = {
-        "notes": cur.execute("SELECT count(*) FROM notes").fetchone()[0],
-        "tags": cur.execute("SELECT count(*) FROM tags").fetchone()[0],
-        "groups": cur.execute("SELECT count(*) FROM groups").fetchone()[0],
-        "note_tags": cur.execute("SELECT count(*) FROM note_tags").fetchone()[0],
-        "notes_fts(故意留空)": cur.execute("SELECT count(*) FROM notes_fts").fetchone()[0],
+        "notes": count_of("notes"),
+        "tags": count_of("tags"),
+        "groups": count_of("groups"),
+        "note_tags": count_of("note_tags"),
+        "notes_fts(故意留空)": count_of("notes_fts"),
     }
     db.close()
     print("灌数据完成：", counts)

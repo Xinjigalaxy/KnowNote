@@ -94,6 +94,7 @@ fun MoreScreen(
                         )
                         StatsRow("设备标识", viewModel.deviceId)
                         StatsRow("SQLite 版本", viewModel.sqliteVersion)
+                        StatsRow("判定依据", viewModel.searchEngineDecision)
                         StatsRow(
                             "探测结果",
                             viewModel.searchEngineProbeError ?: "FTS5 与 FTS4 任一可用即无错误",

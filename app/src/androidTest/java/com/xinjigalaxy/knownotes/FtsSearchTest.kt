@@ -176,4 +176,118 @@ class FtsSearchTest {
         // 探测结果不应是"没探测过"的状态
         assertTrue(FtsStore.probeError != null || repo.searchEngineIsFullText)
     }
+
+    /**
+     * 平台行为取证：一次失败的 `CREATE VIRTUAL TABLE ... USING fts5` 到底在
+     * sqlite_master 里留下了什么？以及这个残留能不能用 DROP 清掉？
+     *
+     * 这是 v1.0.0 在 SQLite 3.32（Android 12/13）上检索降级为 LIKE 的根因所在，
+     * 修复方案必须是"先探测模块、不在真名上留下坏残留"，所以这里把事实固定下来。
+     * 只做取证与日志，不对平台行为本身下断言（那是 SQLite 版本差异，改不了）。
+     */
+    @Test
+    fun whatAFailedVirtualTableCreateLeavesBehind() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val file = File(context.cacheDir, "leftover-probe.db")
+        file.delete()
+        val raw = SQLiteDatabase.openOrCreateDatabase(file, null)
+        try {
+            val fts5Error = runCatching {
+                raw.execSQL("CREATE VIRTUAL TABLE probe_leftover USING fts5(a)")
+            }.exceptionOrNull()?.message
+
+            val rows = ArrayList<String>()
+            raw.rawQuery("SELECT type, name, IFNULL(sql, '<NULL>') FROM sqlite_master", null).use { c ->
+                while (c.moveToNext()) {
+                    rows += "${c.getString(0)}|${c.getString(1)}|${c.getString(2)}"
+                }
+            }
+            Log.i("KnowNoteProbe", "fts5Create=[$fts5Error] sqlite_master=$rows")
+
+            val leftover = rows.any { it.startsWith("table|probe_leftover|") }
+            if (leftover) {
+                val fts4Error = runCatching {
+                    raw.execSQL("CREATE VIRTUAL TABLE probe_leftover USING fts4(a)")
+                }.exceptionOrNull()?.message
+                val dropError = runCatching {
+                    raw.execSQL("DROP TABLE IF EXISTS probe_leftover")
+                }.exceptionOrNull()?.message
+                val remaining = raw.rawQuery(
+                    "SELECT count(*) FROM sqlite_master WHERE name LIKE 'probe_leftover%'", null,
+                ).use { it.moveToFirst(); it.getInt(0) }
+                Log.i(
+                    "KnowNoteProbe",
+                    "断言：残留存在 -> fts4Create=[$fts4Error] drop=[$dropError] 清理后剩余条目=$remaining",
+                )
+            } else {
+                Log.i("KnowNoteProbe", "断言：fts5 创建失败后未留下 sqlite_master 残留")
+            }
+
+            // 再建一张 FTS4 表，看虚拟表在 sqlite_master 里的真面目（sql 列是否为 NULL 是版本相关的，
+            // v1.0.0 正是踩了这个：SQLite 3.32 上取不到 sql，于是把"表已存在"误判成"表不存在"）
+            val fts4Error = runCatching {
+                raw.execSQL("CREATE VIRTUAL TABLE probe_vt USING fts4(a, tokenize=simple)")
+            }.exceptionOrNull()?.message
+            val vtRows = ArrayList<String>()
+            raw.rawQuery(
+                "SELECT type, name, IFNULL(sql, '<NULL>'), IFNULL(rootpage, -1) FROM sqlite_master " +
+                    "WHERE name LIKE 'probe_vt%'",
+                null,
+            ).use { c ->
+                while (c.moveToNext()) {
+                    vtRows += "${c.getString(0)}|${c.getString(1)}|rootpage=${c.getString(3)}|sql=${c.getString(2)}"
+                }
+            }
+            Log.i("KnowNoteProbe", "FTS4 建表=[$fts4Error] sqlite_master 中的虚拟表=$vtRows")
+
+            // 关键取证：建完虚拟表后，**同一条连接**上立刻查 sqlite_master 能不能看到它？
+            // v1.0.0 正是靠这个查询判断"表是否存在"，若看不到就会误判并重试建表。
+            val visibleNow = raw.rawQuery(
+                "SELECT count(*) FROM sqlite_master WHERE type='table' AND name='probe_vt'", null,
+            ).use { it.moveToFirst(); it.getInt(0) }
+            Log.i("KnowNoteProbe", "建表后同连接立刻查 sqlite_master：可见条数=$visibleNow（应为 1）")
+        } finally {
+            raw.close()
+            file.delete()
+        }
+    }
+
+    /**
+     * v1.0.0 的降级 bug 回归测试。
+     *
+     * Room 新建库时会连续回调 onCreate + onOpen，同一个库里 FtsStore.create() 会被调用两次。
+     * 旧实现第二次要靠 sqlite_master.sql 识别已有虚拟表，而 SQLite 3.32（Android 12/13）
+     * 上取不到那一列，于是重试建表 → already exists → 已建好的引擎被降级成 NONE。
+     * 现在重复探测必须幂等。
+     */
+    @Test
+    fun repeatedProbeMustNotDowngradeTheEngine() {
+        val raw = db.openHelper.writableDatabase
+        FtsStore.create(raw)
+        val first = FtsStore.engine
+        FtsStore.create(raw)
+        val second = FtsStore.engine
+        FtsStore.create(raw)
+        val third = FtsStore.engine
+
+        Log.i(
+            "KnowNoteProbe",
+            "重复探测：1st=$first 2nd=$second 3rd=$third | 判定=${FtsStore.lastDecision}",
+        )
+        assertEquals("重复探测不得改变已建好的引擎", first, second)
+        assertEquals("第三次探测同样不得降级", first, third)
+        assertTrue("必须至少有一个全文引擎可用，实际=$third", third.isFullText)
+    }
+
+    /** 已有索引表时，写入的笔记必须立刻可被检索到（幂等识别 + 索引可用性一起验）。 */
+    @Test
+    fun searchStillWorksRightAfterRepeatedProbe() = runBlocking {
+        val raw = db.openHelper.writableDatabase
+        FtsStore.create(raw)
+        FtsStore.create(raw)
+
+        val id = repo.saveNote(null, "重复探测后的检索", "联合索引 与 最左前缀", null, listOf("索引"))
+        assertEquals(listOf(id), repo.searchIds("最左前缀"))
+        assertEquals(listOf(id), repo.searchIds("索引"))
+    }
 }

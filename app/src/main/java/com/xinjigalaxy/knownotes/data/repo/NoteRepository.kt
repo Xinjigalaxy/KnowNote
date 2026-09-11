@@ -40,6 +40,7 @@ class NoteRepository(
     val searchEngineIsFullText: Boolean get() = FtsStore.engine.isFullText
     val searchEngineProbeError: String? get() = FtsStore.probeError
     val sqliteVersion: String get() = FtsStore.sqliteVersion
+    val searchEngineDecision: String get() = FtsStore.lastDecision
 
     fun rawDb(): SupportSQLiteDatabase = db.openHelper.writableDatabase
 
