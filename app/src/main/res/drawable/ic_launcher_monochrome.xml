@@ -1,13 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  单色层（Android 13+ 主题图标 / 动态取色用）。
+  单色层（Android 13+ 主题图标 / 动态取色）。
 
-  这一层只有 alpha 有效、颜色由系统给（跟随壁纸取色），所以必须是**单一颜色的剪影**：
-  形状本身要能独立成图，不能靠"两块颜色拼出来的细节"。
-  以前这里指向彩色的 ic_launcher_foreground（白卡片 + 青色线条），
-  主题图标模式下整块会渲染成一个实心方块 —— 卡片和线条的 alpha 都是 1，没有形状可分。
+  这一层只有 alpha 有效、颜色由系统给（跟随壁纸取色），必须是**单一颜色的剪影**：
+  形状要能独立成图，不能靠"两块颜色拼出来的细节"。
+  以前这里指向彩色的前景（白卡片 + 青色线条），主题图标模式下整块会渲染成一个实心方块 ——
+  卡片和线条的 alpha 都是 1，没有形状可分。
 
-  现在前景本身就是纯剪影（方案 A），这一层与前景同形，直接复用同一组 path。
+  现在前景本身就是纯剪影（描边卡片 + 三条实线），这一层与前景同形、同一组 path。
 -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp"
@@ -16,14 +16,16 @@
     android:viewportHeight="108">
     <path
         android:fillColor="#FFFFFFFF"
-        android:pathData="M28.75,30 H61.25 A4.75,4.75 0 0 1 61.25,39.5 H28.75 A4.75,4.75 0 0 1 28.75,30 Z" />
+        android:fillType="evenOdd"
+        android:pathData="M43,31 H65 A8,8 0 0 1 73,39 V69 A8,8 0 0 1 65,77 H43 A8,8 0 0 1 35,69 V39 A8,8 0 0 1 43,31 Z
+                          M43,36.5 H65 A3.5,3.5 0 0 1 68.5,40 V70 A3.5,3.5 0 0 1 65,73.5 H43 A3.5,3.5 0 0 1 39.5,70 V40 A3.5,3.5 0 0 1 43,36.5 Z" />
     <path
         android:fillColor="#FFFFFFFF"
-        android:pathData="M28.75,50 H51.25 A4.75,4.75 0 0 1 51.25,59.5 H28.75 A4.75,4.75 0 0 1 28.75,50 Z" />
+        android:pathData="M48.5,42.5 H59.5 A2.25,2.25 0 0 1 59.5,47 H48.5 A2.25,2.25 0 0 1 48.5,42.5 Z" />
     <path
         android:fillColor="#FFFFFFFF"
-        android:pathData="M28.75,70 H41.25 A4.75,4.75 0 0 1 41.25,79.5 H28.75 A4.75,4.75 0 0 1 28.75,70 Z" />
+        android:pathData="M48.5,52.75 H59.5 A2.25,2.25 0 0 1 59.5,57.25 H48.5 A2.25,2.25 0 0 1 48.5,52.75 Z" />
     <path
         android:fillColor="#FFFFFFFF"
-        android:pathData="M77,27.25 A7.5,7.5 0 1 1 77,42.25 A7.5,7.5 0 1 1 77,27.25 Z" />
+        android:pathData="M48.5,63 H59.5 A2.25,2.25 0 0 1 59.5,67.5 H48.5 A2.25,2.25 0 0 1 48.5,63 Z" />
 </vector>
