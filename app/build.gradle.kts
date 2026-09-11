@@ -18,8 +18,8 @@ android {
         applicationId = "com.xinjigalaxy.knownotes"
         minSdk = 26
         targetSdk = 36
-        versionCode = 4
-        versionName = "1.1.1-demo"
+        versionCode = 5
+        versionName = "1.2.0-demo"
         vectorDrawables { useSupportLibrary = true }
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }

@@ -18,8 +18,8 @@ object AppViewModelProvider {
     val Factory = viewModelFactory {
         initializer { NoteListViewModel(app().container.repository, app().container.uiPrefs) }
         initializer { NoteEditViewModel(app().container.repository) }
-        initializer { GroupViewModel(app().container.repository) }
-        initializer { TagViewModel(app().container.repository) }
+        initializer { GroupViewModel(app().container.repository, app().container.uiPrefs) }
+        initializer { TagViewModel(app().container.repository, app().container.uiPrefs) }
         initializer { TrashViewModel(app().container.repository) }
         initializer { ExportViewModel(app().container.repository, app().container.exporter) }
         initializer { MoreViewModel(app().container.repository) }

@@ -9,6 +9,8 @@ import com.xinjigalaxy.knownotes.data.model.SearchHistory
 import com.xinjigalaxy.knownotes.data.model.Tag
 import com.xinjigalaxy.knownotes.data.prefs.UiPrefs
 import com.xinjigalaxy.knownotes.data.repo.NoteRepository
+import com.xinjigalaxy.knownotes.ui.NoteLayout
+import com.xinjigalaxy.knownotes.ui.toNoteLayout
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.Flow
@@ -28,18 +30,6 @@ import kotlinx.coroutines.launch
 /** 分组筛选哨兵：真实 group_id 从 1 开始自增。 */
 const val GROUP_ALL = -1L
 const val GROUP_NONE = -2L
-
-/** 列表展示形态，可在界面上循环切换。 */
-enum class NoteLayout {
-    LIST,
-    STAGGERED,
-    ;
-
-    fun next(): NoteLayout = if (this == LIST) STAGGERED else LIST
-}
-
-private fun String?.toNoteLayout(): NoteLayout =
-    NoteLayout.entries.firstOrNull { it.name.equals(this, ignoreCase = true) } ?: NoteLayout.LIST
 
 data class NoteListUiState(
     val query: String = "",
