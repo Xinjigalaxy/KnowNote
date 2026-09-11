@@ -37,6 +37,7 @@ import com.xinjigalaxy.knownotes.ui.more.MoreScreen
 import com.xinjigalaxy.knownotes.ui.more.SyncScreen
 import com.xinjigalaxy.knownotes.ui.note.NoteEditScreen
 import com.xinjigalaxy.knownotes.ui.note.NoteListScreen
+import com.xinjigalaxy.knownotes.ui.settings.SettingsScreen
 import com.xinjigalaxy.knownotes.ui.trash.TrashScreen
 
 object Routes {
@@ -47,6 +48,7 @@ object Routes {
     const val EXPORT = "export"
     const val SYNC = "sync"
     const val TRASH = "trash"
+    const val SETTINGS = "settings"
 
     /** 二级页面：某个分组 / 某个标签下的笔记。 */
     const val GROUP_NOTES_PATTERN = "group/{groupId}"
@@ -132,6 +134,7 @@ fun KnowNoteRoot() {
                     onOpenExport = { navController.navigate(Routes.EXPORT) },
                     onOpenSync = { navController.navigate(Routes.SYNC) },
                     onOpenTrash = { navController.navigate(Routes.TRASH) },
+                    onOpenSettings = { navController.navigate(Routes.SETTINGS) },
                 )
             }
             composable(
@@ -158,6 +161,7 @@ fun KnowNoteRoot() {
             composable(Routes.EXPORT) { ExportScreen(onBack = { navController.popBackStack() }) }
             composable(Routes.SYNC) { SyncScreen(onBack = { navController.popBackStack() }) }
             composable(Routes.TRASH) { TrashScreen(onBack = { navController.popBackStack() }) }
+            composable(Routes.SETTINGS) { SettingsScreen(onBack = { navController.popBackStack() }) }
 
             composable(
                 route = Routes.GROUP_NOTES_PATTERN,

@@ -63,6 +63,10 @@ interface NoteDao {
     @Query("SELECT COUNT(*) FROM notes WHERE is_deleted = 1 AND is_purged = 0")
     suspend fun deletedCount(): Int
 
+    /** 回收站条数的实时流：「更多」页概览要跟着变，不能用一次性查询（v1.4.0 修的 bug）。 */
+    @Query("SELECT COUNT(*) FROM notes WHERE is_deleted = 1 AND is_purged = 0")
+    fun observeDeletedCount(): Flow<Int>
+
     @Insert
     suspend fun insert(note: Note): Long
 

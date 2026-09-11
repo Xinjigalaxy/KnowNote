@@ -116,7 +116,10 @@ fun TrashScreen(
             onDismissRequest = { purgeTarget = null },
             title = { Text("彻底删除这条笔记？") },
             text = {
-                Text("「${target.note.title.ifBlank { "未命名笔记" }}」会从数据库中永久移除，无法恢复。")
+                Text(
+                    "「${target.note.title.ifBlank { "未命名笔记" }}」会从列表与检索里永久消失，本机无法恢复；" +
+                        "删除状态会同步给其他设备。"
+                )
             },
             confirmButton = {
                 TextButton(onClick = {
@@ -132,7 +135,12 @@ fun TrashScreen(
         AlertDialog(
             onDismissRequest = { confirmEmpty = false },
             title = { Text("清空回收站？") },
-            text = { Text("当前 ${notes.size} 条笔记会被永久删除，无法恢复。") },
+            text = {
+                Text(
+                    "当前 ${notes.size} 条笔记会从列表与检索里永久消失，本机无法恢复；" +
+                        "删除状态会同步给其他设备。"
+                )
+            },
             confirmButton = {
                 TextButton(onClick = {
                     confirmEmpty = false

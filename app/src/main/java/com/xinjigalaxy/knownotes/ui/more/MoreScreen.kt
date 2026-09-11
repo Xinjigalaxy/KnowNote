@@ -16,6 +16,7 @@ import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.outlined.DeleteOutline
 import androidx.compose.material.icons.outlined.FileDownload
 import androidx.compose.material.icons.outlined.Info
+import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.Sync
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
@@ -57,6 +58,7 @@ fun MoreScreen(
     onOpenExport: () -> Unit,
     onOpenSync: () -> Unit,
     onOpenTrash: () -> Unit,
+    onOpenSettings: () -> Unit,
     viewModel: MoreViewModel = viewModel(factory = AppViewModelProvider.Factory),
 ) {
     val stats by viewModel.stats.collectAsStateWithLifecycle()
@@ -147,6 +149,15 @@ fun MoreScreen(
                     title = "局域网同步",
                     subtitle = "第三阶段实现：一主多从 + 增量变更日志",
                     onClick = onOpenSync,
+                )
+            }
+
+            item {
+                EntryCard(
+                    icon = Icons.Outlined.Settings,
+                    title = "设置",
+                    subtitle = "主题模式 / 动态取色 / 回收站定时清理",
+                    onClick = onOpenSettings,
                 )
             }
 

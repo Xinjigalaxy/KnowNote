@@ -9,6 +9,8 @@ import com.xinjigalaxy.knownotes.data.db.AppDatabase
 import com.xinjigalaxy.knownotes.data.export.Exporter
 import com.xinjigalaxy.knownotes.data.prefs.UiPrefs
 import com.xinjigalaxy.knownotes.data.repo.NoteRepository
+import com.xinjigalaxy.knownotes.data.settings.AppSettings
+import com.xinjigalaxy.knownotes.data.settings.TrashCleanupScheduler
 import com.xinjigalaxy.knownotes.data.sync.SyncClient
 import com.xinjigalaxy.knownotes.data.sync.SyncCoordinator
 import com.xinjigalaxy.knownotes.data.sync.SyncEngine
@@ -42,6 +44,8 @@ class AppContainer(context: Context) {
     val deviceId: String = resolveDeviceId(appContext)
     val deviceName: String = "${Build.MANUFACTURER} ${Build.MODEL}".trim()
     val uiPrefs = UiPrefs(appContext)
+    /** 响应式设置（主题 / 动态取色 / 回收站清理），Compose 直接 collect。 */
+    val settings = AppSettings(uiPrefs)
     val repository = NoteRepository(database, deviceId)
     val exporter = Exporter(appContext, repository)
 
@@ -62,6 +66,8 @@ class AppContainer(context: Context) {
             if (uiPrefs.hostAutoStart() && key.isNotBlank()) {
                 syncServer.start(scope, uiPrefs.hostPort(), key)
             }
+            // 自愈：设置里开着定时清理、但周期任务被系统清掉过，就在这里补排一次
+            TrashCleanupScheduler.apply(appContext, uiPrefs.autoPurgeTrash())
         }
     }
 

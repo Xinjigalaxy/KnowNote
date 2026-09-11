@@ -18,8 +18,8 @@ android {
         applicationId = "com.xinjigalaxy.knownotes"
         minSdk = 26
         targetSdk = 36
-        versionCode = 7
-        versionName = "1.3.0-demo"
+        versionCode = 8
+        versionName = "1.4.0-demo"
         vectorDrawables { useSupportLibrary = true }
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -81,6 +81,9 @@ dependencies {
     implementation(libs.androidx.room.runtime)
     implementation(libs.androidx.room.ktx)
     ksp(libs.androidx.room.compiler)
+
+    // 回收站定时清理（设置页开关驱动 PeriodicWorkRequest）
+    implementation(libs.androidx.work.runtime.ktx)
 
     debugImplementation(libs.androidx.ui.tooling)
 
