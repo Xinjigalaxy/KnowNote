@@ -31,6 +31,7 @@ class MoreViewModel(private val repo: NoteRepository) : ViewModel() {
     val searchEngineIsFullText: Boolean = repo.searchEngineIsFullText
     val searchEngineProbeError: String? = repo.searchEngineProbeError
     val sqliteVersion: String = repo.sqliteVersion
+    val searchEngineDecision: String = repo.searchEngineDecision
 
     fun purgeDeleted(onDone: (Int) -> Unit) {
         viewModelScope.launch {

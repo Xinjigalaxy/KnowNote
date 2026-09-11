@@ -24,13 +24,21 @@ enum class FtsEngine(val label: String, val description: String) {
  * 用 @Query 直接引用虚拟表也会被编译期 schema 校验拦下。所以这里手写 DDL 与
  * MATCH 查询：建表挂在 RoomDatabase.Callback 上，查询走原生 Cursor。
  *
- * 为什么要有引擎探测：**Android 自带的 SQLite 并不保证编译了 FTS5**。
- * 在 Android 15（API 35）上实测 `no such module: fts5`，所以这里按
- * FTS5 → FTS4 → LIKE 逐级降级，并把实际用到的引擎暴露给界面，
- * 而不是让检索悄悄失效。
+ * ## 三条实机验证过的硬约束（每一行都有血）
  *
- * 表结构（非 external-content）：title / content / tags 存的是 FtsText.index()
- * 处理后的分词副本，同步由 Repository 在事务内显式完成。
+ * 1. **Android 不保证编译 FTS5**：Android 15（SQLite 3.44.3）实测
+ *    `no such module: fts5`，只有 FTS4。所以按 FTS5 → FTS4 → LIKE 降级。
+ *
+ * 2. **不能靠 sqlite_master 的 sql 列判断已有虚拟表**：SQLite 3.32（Android 12/13）
+ *    上虚拟表那一行的 `sql` 取不到值，于是"表已存在"被误判成"表不存在"，
+ *    接着重试建表 → `table notes_fts already exists` → 引擎被错误降级成 NONE。
+ *    现在改为**按行为探测**：能不能 MATCH、有没有 bm25()，不看 DDL 文本。
+ *
+ * 3. **探测模块可用性绝不能拿真表名试**：失败的 CREATE 在部分版本会留下残留，
+ *    所以模块探测走 `temp.` 临时表，真名只在确认可用后才落笔。
+ *
+ * 另外：Room 新建库时会连续回调 onCreate + onOpen，也就是同一个库里 create() 会被
+ * 调用两次。整个过程必须幂等 —— 第二次不得降级第一次的结论。
  */
 class FtsStore(private val appDatabase: AppDatabase) {
 
@@ -47,9 +55,9 @@ class FtsStore(private val appDatabase: AppDatabase) {
         val sql = db
         sql.beginTransaction()
         try {
-            sql.execSQL("DELETE FROM notes_fts WHERE rowid = ?", arrayOf<Any?>(noteId))
+            sql.execSQL("DELETE FROM $TABLE WHERE rowid = ?", arrayOf<Any?>(noteId))
             sql.execSQL(
-                "INSERT INTO notes_fts(rowid, title, content, tags) VALUES (?, ?, ?, ?)",
+                "INSERT INTO $TABLE(rowid, title, content, tags) VALUES (?, ?, ?, ?)",
                 arrayOf<Any?>(noteId, indexedTitle, indexedContent, indexedTags),
             )
             sql.setTransactionSuccessful()
@@ -63,7 +71,7 @@ class FtsStore(private val appDatabase: AppDatabase) {
 
     fun remove(noteId: Long) {
         if (!available) return
-        runCatching { db.execSQL("DELETE FROM notes_fts WHERE rowid = ?", arrayOf<Any?>(noteId)) }
+        runCatching { db.execSQL("DELETE FROM $TABLE WHERE rowid = ?", arrayOf<Any?>(noteId)) }
     }
 
     /** 返回命中的笔记 id。FTS5 用 bm25 相关度排序，FTS4 退化为 rowid 倒序。 */
@@ -101,9 +109,6 @@ class FtsStore(private val appDatabase: AppDatabase) {
 
         const val TABLE = "notes_fts"
 
-        // 注意：探测模块可用性时**不能**用 IF NOT EXISTS——
-        // 当同名表已存在（比如早先建成了 FTS4）时，SQLite 会直接跳过模块加载并返回成功，
-        // 于是引擎被误判成 FTS5，再去用 FTS4 不支持的 bm25() 就会搜不到任何东西。
         private const val DDL_FTS5 =
             "CREATE VIRTUAL TABLE $TABLE USING fts5(title, content, tags, tokenize='unicode61')"
 
@@ -114,38 +119,125 @@ class FtsStore(private val appDatabase: AppDatabase) {
         var engine: FtsEngine = FtsEngine.NONE
             private set
 
-        /** 探测失败原因，用于诊断展示。 */
+        /** 最近一次失败的探测信息，诊断展示用。 */
         @Volatile
         var probeError: String? = null
             private set
 
-        /** 设备 SQLite 版本，诊断用（不同 Android 版本差异很大，实机反馈很关键）。 */
+        /** 设备 SQLite 版本，诊断用（不同 Android 版本差异很大）。 */
         @Volatile
         var sqliteVersion: String = "未知"
             private set
 
+        /** 本次判定走了哪条路径，实机排查全靠它。 */
+        @Volatile
+        var lastDecision: String = "尚未探测"
+            private set
+
         /**
-         * 建表：按 FTS5 → FTS4 逐级尝试，都不行则标记 NONE（走 LIKE）。
-         * 表已存在时以 sqlite_master 里的真实 DDL 为准。
+         * 建表 / 识别已有表。**必须幂等**：重复调用不得降级已有结论。
          */
         fun create(db: SupportSQLiteDatabase) {
             detectSqliteVersion(db)
 
-            val existing = existingDdl(db)
-            if (existing != null) {
-                engine = if (existing.contains("fts5", ignoreCase = true)) {
-                    FtsEngine.FTS5
-                } else {
-                    FtsEngine.FTS4
+            // 情形一：表已存在 —— 按行为判定引擎（不看 sqlite_master.sql，见类注释第 2 条）
+            if (nameTaken(db)) {
+                when (val existing = probeExisting(db)) {
+                    FtsEngine.NONE -> {
+                        // 名字被占但没有可用的虚拟表（残留 / 类型不对）：清掉后按正常流程重建
+                        if (dropUnusable(db)) {
+                            createFresh(db, prefix = "清理不可用表后重建")
+                        } else {
+                            engine = FtsEngine.NONE
+                            lastDecision = "同名表不可用且删不掉，降级 LIKE"
+                        }
+                    }
+
+                    else -> {
+                        engine = existing
+                        lastDecision = "沿用已有 ${existing.label} 索引"
+                    }
                 }
                 return
             }
 
+            // 情形二：全新库
+            createFresh(db, prefix = "新建")
+        }
+
+        private fun createFresh(db: SupportSQLiteDatabase, prefix: String) {
             engine = when {
-                tryExec(db, DDL_FTS5, "FTS5") -> FtsEngine.FTS5
-                tryExec(db, DDL_FTS4, "FTS4") -> FtsEngine.FTS4
+                moduleAvailable(db, "fts5") && tryExec(db, DDL_FTS5, "FTS5") -> FtsEngine.FTS5
+                moduleAvailable(db, "fts4") && tryExec(db, DDL_FTS4, "FTS4") -> FtsEngine.FTS4
                 else -> FtsEngine.NONE
             }
+            lastDecision = if (engine.isFullText) "$prefix ${engine.label} 索引" else "无可用全文引擎，降级 LIKE"
+        }
+
+        /**
+         * 按行为判定已有表的引擎，全程不看 DDL 文本：
+         * MATCH 能过 ⇒ 模块在；再试 bm25()，它是 FTS5 专有函数。
+         */
+        private fun probeExisting(db: SupportSQLiteDatabase): FtsEngine {
+            val plain = runCatching {
+                db.query("SELECT rowid FROM $TABLE WHERE $TABLE MATCH ? LIMIT 1", arrayOf<Any?>("x*")).close()
+            }
+            if (plain.isFailure) {
+                probeError = "已有 $TABLE 不可用：${plain.exceptionOrNull()?.message}"
+                Log.w(TAG, "已有 $TABLE 无法用于检索：${plain.exceptionOrNull()?.message}")
+                return FtsEngine.NONE
+            }
+            val ranked = runCatching {
+                db.query(
+                    "SELECT rowid FROM $TABLE WHERE $TABLE MATCH ? ORDER BY bm25($TABLE) LIMIT 1",
+                    arrayOf<Any?>("x*"),
+                ).close()
+            }
+            return if (ranked.isSuccess) FtsEngine.FTS5 else FtsEngine.FTS4
+        }
+
+        /** 在 temp schema 里探测模块，绝不在真表名上试错。 */
+        private fun moduleAvailable(db: SupportSQLiteDatabase, module: String): Boolean {
+            val probe = "knownote_probe_$module"
+            return try {
+                db.execSQL("DROP TABLE IF EXISTS temp.$probe")
+                db.execSQL("CREATE VIRTUAL TABLE temp.$probe USING $module(x)")
+                db.execSQL("DROP TABLE temp.$probe")
+                true
+            } catch (t: Throwable) {
+                probeError = "$module: ${t.message}"
+                Log.w(TAG, "全文检索引擎 $module 不可用: ${t.message}")
+                runCatching { db.execSQL("DROP TABLE IF EXISTS temp.$probe") }
+                false
+            }
+        }
+
+        private fun tryExec(db: SupportSQLiteDatabase, ddl: String, name: String): Boolean = try {
+            db.execSQL(ddl)
+            true
+        } catch (t: Throwable) {
+            probeError = "$name: ${t.message}"
+            Log.w(TAG, "建表失败 $name: ${t.message}")
+            false
+        }
+
+        private fun nameTaken(db: SupportSQLiteDatabase): Boolean = try {
+            var found = false
+            db.query(
+                "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?",
+                arrayOf<Any?>(TABLE),
+            ).use { c -> if (c.moveToFirst()) found = true }
+            found
+        } catch (t: Throwable) {
+            false
+        }
+
+        private fun dropUnusable(db: SupportSQLiteDatabase): Boolean = try {
+            db.execSQL("DROP TABLE IF EXISTS $TABLE")
+            !nameTaken(db)
+        } catch (t: Throwable) {
+            Log.w(TAG, "清理不可用的 $TABLE 失败：${t.message}")
+            false
         }
 
         private fun detectSqliteVersion(db: SupportSQLiteDatabase) {
@@ -158,27 +250,7 @@ class FtsStore(private val appDatabase: AppDatabase) {
             }
         }
 
-        private fun existingDdl(db: SupportSQLiteDatabase): String? = try {
-            var ddl: String? = null
-            db.query(
-                "SELECT sql FROM sqlite_master WHERE type='table' AND name=?",
-                arrayOf<Any?>(TABLE),
-            ).use { c -> if (c.moveToFirst()) ddl = c.getString(0) }
-            ddl
-        } catch (t: Throwable) {
-            null
-        }
-
-        private fun tryExec(db: SupportSQLiteDatabase, ddl: String, name: String): Boolean = try {
-            db.execSQL(ddl)
-            true
-        } catch (t: Throwable) {
-            probeError = "$name: ${t.message}"
-            Log.w(TAG, "全文检索引擎 $name 不可用: ${t.message}")
-            false
-        }
-
-        /** 自愈：索引条数与在线笔记数不一致时整体重建（升级/异常退出都能兜住）。 */
+        /** 自愈：索引条数与在线笔记数不一致时整体重建（升级/异常退出/外部灌库都能兜住）。 */
         fun repair(db: SupportSQLiteDatabase) {
             if (!engine.isFullText) return
             val indexed = db.countOf("SELECT count(*) FROM $TABLE") ?: return
@@ -189,6 +261,7 @@ class FtsStore(private val appDatabase: AppDatabase) {
             try {
                 reindexAll(db)
                 db.setTransactionSuccessful()
+                Log.i(TAG, "FTS 索引条数对不上（$indexed → $live），已整体重建")
             } catch (t: Throwable) {
                 Log.e(TAG, "重建 FTS 索引失败: ${t.message}")
             } finally {
