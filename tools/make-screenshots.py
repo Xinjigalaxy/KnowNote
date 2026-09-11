@@ -12,6 +12,7 @@
 """
 from __future__ import annotations
 
+import os
 import pathlib
 import re
 import subprocess
@@ -21,8 +22,12 @@ import time
 sys.path.insert(0, str(pathlib.Path(__file__).parent))
 from redact_screenshots import redact  # noqa: E402
 
-ADB = "C:/Users/zsnc5/AppData/Local/Android/Sdk/platform-tools/adb.exe"
-SERIAL = sys.argv[1] if len(sys.argv) > 1 else "<device-serial>"
+# 本机路径按需改；设备序列号**不写死**（那是能定位到具体机器的标识）：
+# 用法 python tools/make-screenshots.py <serial>，serial 从 `adb devices` 抄
+ADB = os.environ.get("ADB", "adb")
+if len(sys.argv) < 2:
+    raise SystemExit("用法：python tools/make-screenshots.py <设备序列号>（adb devices 可查）")
+SERIAL = sys.argv[1]
 PKG = "com.xinjigalaxy.knownotes.debug"
 OUT = pathlib.Path("docs/screenshots")
 TMP = pathlib.Path(__import__("os").environ.get("LOCALAPPDATA", "/tmp")) / "Temp"
