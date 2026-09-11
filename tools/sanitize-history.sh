@@ -51,4 +51,5 @@ while read -r c; do
 done < <(git rev-list --all)
 echo "   含敏感模式的提交数：$bad  （应为 0）"
 
-echo "== 完成。检查无误后再： git push --force --all && git push --force --tags =="
+echo "== 完成。检查无误后再（**不要用 --all**，那会连带推送备份分支，里面有带密钥的旧文件）："
+echo "     git push --force origin main && git push --force --tags"

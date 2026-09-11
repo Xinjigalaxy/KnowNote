@@ -1,10 +1,12 @@
 # KnowNote · 碎片笔记
 
+[English](README.en.md) · **中文**
+
 安卓记事本应用：Kotlin + Jetpack Compose + **Material 3**，Room(SQLite) + 全文检索（FTS5/FTS4/LIKE 三级降级），
 MVVM + Repository，局域网同步（一主多从）。
 
 应用名 **KnowNote**（中文「碎片笔记」/ 繁體「碎片筆記」），界面支持
-**跟随系统 / 简体中文 / 繁體中文 / English / 日本語**，应用图标带单色层（Android 13+ 主题图标）。
+**跟随系统 / 简体中文 / 繁體中文 / English / 日本語**，应用图标为「圆角卡片 + 三条笔记线」剪影，带单色层（Android 13+ 主题图标取色）。
 
 - 包名：`com.xinjigalaxy.knownotes`（debug 变体带 `.debug` 后缀）
 - minSdk 26 / targetSdk 36 / compileSdk 36
@@ -44,6 +46,20 @@ MVVM + Repository，局域网同步（一主多从）。
 底部导航 4 个条目：笔记 / 分组 / 标签 / 更多。
 
 交互约定：列表里**点击 = 查看**（Markdown 预览），**长按 = 编辑**；新建走右下角「记一条」。
+
+## 界面
+
+<a href="docs/screenshots/01-notes-list.png"><img src="docs/screenshots/01-notes-list.png" width="200" alt="笔记列表"></a>
+<a href="docs/screenshots/02-note-preview.png"><img src="docs/screenshots/02-note-preview.png" width="200" alt="Markdown 预览"></a>
+<a href="docs/screenshots/03-search.png"><img src="docs/screenshots/03-search.png" width="200" alt="全文检索"></a>
+<a href="docs/screenshots/07-settings.png"><img src="docs/screenshots/07-settings.png" width="200" alt="设置"></a>
+
+<a href="docs/screenshots/04-groups.png"><img src="docs/screenshots/04-groups.png" width="200" alt="分组"></a>
+<a href="docs/screenshots/05-group-detail.png"><img src="docs/screenshots/05-group-detail.png" width="200" alt="分组二级页面"></a>
+<a href="docs/screenshots/08-settings-dark.png"><img src="docs/screenshots/08-settings-dark.png" width="200" alt="深色主题"></a>
+<a href="docs/screenshots/10-english-settings.png"><img src="docs/screenshots/10-english-settings.png" width="200" alt="英文界面"></a>
+
+截图取自模拟器 + 演示数据；同步页的共享密钥、设备标识与局域网地址已做打码（见 `docs/screenshots/09-sync.png`）。
 
 ## 二、构建与运行
 
@@ -296,3 +312,7 @@ W KnowNote: 全文检索引擎 FTS4 不可用: table notes_fts already exists ..
 5. **导出**：导出范围选择（按分组 / 标签 / 时间），以及导入（目前只导出）
 6. **墓碑增长**：`is_purged=1` 的行会一直留着（这是删除能同步的前提）。个人数据量下无感，但严格来说需要一个「墓碑保留期」——
    比如超过一年且各设备水位线都早已越过它的墓碑可以真删。做之前要先确认所有从机都已同步过该时间点
+
+## 八、许可
+
+暂未附开源许可协议，即默认保留所有权利。想复用这套代码的话先打声招呼 —— 或者开个 issue，我们把协议定下来（大概率选 MIT）。
