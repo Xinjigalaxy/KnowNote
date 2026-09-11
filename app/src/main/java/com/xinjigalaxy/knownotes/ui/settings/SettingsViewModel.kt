@@ -2,10 +2,13 @@ package com.xinjigalaxy.knownotes.ui.settings
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.xinjigalaxy.knownotes.R
 import com.xinjigalaxy.knownotes.data.prefs.UiPrefs
 import com.xinjigalaxy.knownotes.data.repo.NoteRepository
+import com.xinjigalaxy.knownotes.data.settings.AppLanguage
 import com.xinjigalaxy.knownotes.data.settings.AppSettings
 import com.xinjigalaxy.knownotes.data.settings.ThemeMode
+import com.xinjigalaxy.knownotes.ui.components.UiMessage
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -25,6 +28,7 @@ class SettingsViewModel(
     private val settings: AppSettings,
     private val prefs: UiPrefs,
     private val scheduleCleanup: (Boolean) -> Unit,
+    private val applyLocale: (AppLanguage) -> Unit,
 ) : ViewModel() {
 
     data class UiState(
@@ -36,15 +40,16 @@ class SettingsViewModel(
         val trashCount: Int = 0,
         val lastPurgeAt: Long = 0L,
         val lastPurgeCount: Int = 0,
+        val language: AppLanguage = AppLanguage.SYSTEM,
         val busy: Boolean = false,
-        val message: String? = null,
+        val message: UiMessage? = null,
     )
 
     private data class Local(
         val lastPurgeAt: Long = 0L,
         val lastPurgeCount: Int = 0,
         val busy: Boolean = false,
-        val message: String? = null,
+        val message: UiMessage? = null,
     )
 
     private val local = MutableStateFlow(
@@ -67,10 +72,20 @@ class SettingsViewModel(
             trashCount = trashCount,
             lastPurgeAt = l.lastPurgeAt,
             lastPurgeCount = l.lastPurgeCount,
+            language = app.language,
             busy = l.busy,
             message = l.message,
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000L), UiState())
+
+    /**
+     * 切语言：写偏好 + 通知系统（33+ 由 LocaleManager 重建 Activity，
+     * 低版本由界面自己 recreate()，见 SettingsScreen）。
+     */
+    fun setLanguage(language: AppLanguage) {
+        settings.setLanguage(language)
+        applyLocale(language)
+    }
 
     fun setThemeMode(mode: ThemeMode) {
         settings.setThemeMode(mode)
@@ -86,9 +101,9 @@ class SettingsViewModel(
         local.update {
             it.copy(
                 message = if (enabled) {
-                    "已开启：系统会在合适时机每天清理一次回收站"
+                    UiMessage(R.string.on_the_system_cleans_the_trash_once_a_day)
                 } else {
-                    "已关闭定时清理，回收站里的笔记会一直留着"
+                    UiMessage(R.string.scheduled_cleanup_off_trashed_notes_are_kept_ind)
                 },
             )
         }
@@ -111,11 +126,14 @@ class SettingsViewModel(
                     lastPurgeAt = if (removed >= 0) System.currentTimeMillis() else it.lastPurgeAt,
                     lastPurgeCount = if (removed >= 0) removed else it.lastPurgeCount,
                     message = if (removed < 0) {
-                        "清理失败，请重试"
+                        UiMessage(R.string.cleanup_failed_try_again)
                     } else if (removed == 0) {
-                        "没有超过 $days 天的笔记需要清理"
+                        UiMessage(R.string.no_notes_older_than_days_days_to_clean_up, listOf(days))
                     } else {
-                        "已彻底删除 $removed 条超过 $days 天的笔记（其他设备下次同步也会跟着删）"
+                        UiMessage(
+                            R.string.permanently_deleted_removed_notes_older_than_day,
+                            listOf(removed, days),
+                        )
                     },
                 )
             }

@@ -59,7 +59,7 @@ class SyncServer(
     fun start(scope: CoroutineScope, port: Int, key: String): Result<Int> {
         if (_status.value.running) return Result.success(_status.value.port)
         if (key.isBlank()) {
-            return Result.failure(IllegalArgumentException("请先设置共享密钥：没有密钥的服务等于把笔记公开在局域网里"))
+            return Result.failure(IllegalArgumentException("Set a shared key first: a server without a key publishes your notes to the LAN"))
         }
         return runCatching {
             val server = ServerSocket(port)
@@ -103,7 +103,7 @@ class SyncServer(
 
                 val request = readRequest(input)
                 if (request == null) {
-                    writeJson(output, 400, errorJson("请求格式不合法"))
+                    writeJson(output, 400, errorJson("Malformed request"))
                     return
                 }
 
@@ -121,16 +121,16 @@ class SyncServer(
                 if (request.method == "POST" && request.path == "/sync") {
                     val presented = request.headers["x-knownote-key"].orEmpty()
                     if (!secureEquals(presented, key)) {
-                        writeJson(output, 401, errorJson("共享密钥不匹配"))
+                        writeJson(output, 401, errorJson("Shared key mismatch"))
                         return
                     }
                     val body = runCatching { JSONObject(request.body) }.getOrNull()
                     if (body == null) {
-                        writeJson(output, 400, errorJson("请求体不是合法 JSON"))
+                        writeJson(output, 400, errorJson("Request body is not valid JSON"))
                         return
                     }
                     if (body.optInt("protocol", 0) != SYNC_PROTOCOL) {
-                        writeJson(output, 426, errorJson("协议版本不一致，请把两台设备升到同一版本"))
+                        writeJson(output, 426, errorJson("Protocol version mismatch; update both devices to the same version"))
                         return
                     }
 
@@ -150,7 +150,7 @@ class SyncServer(
                             pushed = applied.changed,
                             conflicts = applied.conflicts,
                             ok = true,
-                            message = "设备 ${request_.deviceId.take(8)} 接入",
+                            message = "device ${request_.deviceId.take(8)} connected",
                         )
                     )
                     _status.update { it.copy(servedRequests = it.servedRequests + 1) }
@@ -171,7 +171,7 @@ class SyncServer(
                     return
                 }
 
-                writeJson(output, 404, errorJson("没有这个接口"))
+                writeJson(output, 404, errorJson("No such endpoint"))
             }
         }.onFailure { e ->
             _status.update { it.copy(lastError = e.message) }

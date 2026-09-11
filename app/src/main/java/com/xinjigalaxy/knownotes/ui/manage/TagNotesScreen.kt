@@ -1,12 +1,14 @@
 package com.xinjigalaxy.knownotes.ui.manage
 
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.res.stringResource
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.xinjigalaxy.knownotes.R
 import com.xinjigalaxy.knownotes.data.model.NoteWithTags
 import com.xinjigalaxy.knownotes.data.prefs.UiPrefs
 import com.xinjigalaxy.knownotes.data.repo.NoteRepository
@@ -27,7 +29,7 @@ class TagNotesViewModel(
 ) : ViewModel() {
 
     data class UiState(
-        val title: String = "标签",
+        val title: String? = null,
         val notes: List<NoteWithTags> = emptyList(),
         val groupNames: Map<Long, String> = emptyMap(),
         val layout: NoteLayout = NoteLayout.LIST,
@@ -45,7 +47,7 @@ class TagNotesViewModel(
     ) { tags, groups, notes, id, currentLayout ->
         val tag = tags.firstOrNull { it.id == id }
         UiState(
-            title = tag?.let { "#${it.name}" } ?: "标签",
+            title = tag?.let { "#${it.name}" },
             notes = notes.filter { item -> item.tags.any { it.id == id } },
             groupNames = groups.associate { it.id to it.name },
             layout = currentLayout,
@@ -73,11 +75,11 @@ fun TagNotesScreen(
     val state by viewModel.uiState.collectAsStateWithLifecycle()
 
     NoteCollectionScreen(
-        title = state.title,
+        title = state.title ?: stringResource(R.string.tags),
         notes = state.notes,
         groupNames = state.groupNames,
         layout = state.layout,
-        filterHint = "在本标签内筛选",
+        filterHint = stringResource(R.string.filter_within_this_tag),
         onToggleLayout = viewModel::toggleLayout,
         onOpenNote = onOpenNote,
         onBack = onBack,

@@ -30,6 +30,7 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.res.stringResource
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
@@ -37,10 +38,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.xinjigalaxy.knownotes.R
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.xinjigalaxy.knownotes.data.export.ExportFormat
 import com.xinjigalaxy.knownotes.ui.AppViewModelProvider
+import com.xinjigalaxy.knownotes.ui.components.rendered
 import androidx.compose.foundation.selection.selectable
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -51,6 +54,7 @@ fun ExportScreen(
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
+    val messageText = state.message?.rendered()
 
     val createDocument = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.CreateDocument("*/*"),
@@ -59,8 +63,8 @@ fun ExportScreen(
     }
 
     LaunchedEffect(state.message) {
-        state.message?.let {
-            snackbarHostState.showSnackbar(it)
+        if (messageText != null) {
+            snackbarHostState.showSnackbar(messageText)
             viewModel.consumeMessage()
         }
     }
@@ -70,10 +74,10 @@ fun ExportScreen(
             TopAppBar(
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.back))
                     }
                 },
-                title = { Text("导出数据") },
+                title = { Text(stringResource(R.string.export_data)) },
             )
         },
         snackbarHost = { SnackbarHost(snackbarHostState) },
@@ -87,7 +91,7 @@ fun ExportScreen(
         ) {
             item {
                 Text(
-                    text = "导出内容包含笔记、标签、分组及其关联关系。SAF 保存，不需要存储权限。",
+                    text = stringResource(R.string.exports_notes_tags_groups_and_their_links_saved_),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -130,7 +134,7 @@ fun ExportScreen(
                                         fontWeight = FontWeight.Medium,
                                     )
                                     Text(
-                                        text = format.description,
+                                        text = stringResource(format.descriptionRes),
                                         style = MaterialTheme.typography.bodySmall,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     )
@@ -148,14 +152,14 @@ fun ExportScreen(
                     elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
                 ) {
                     Column(modifier = Modifier.padding(16.dp)) {
-                        Text("本次导出预计包含", style = MaterialTheme.typography.titleSmall)
+                        Text(stringResource(R.string.this_export_will_contain), style = MaterialTheme.typography.titleSmall)
                         Text(
-                            text = "笔记 ${state.stats?.notes ?: 0} 条 · 标签 ${state.stats?.tags ?: 0} 个 · 分组 ${state.stats?.groups ?: 0} 个",
+                            text = stringResource(R.string.state_stats_notes_0_notes_state_stats_tags_0_tag, state.stats?.notes ?: 0, state.stats?.tags ?: 0, state.stats?.groups ?: 0),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                         Text(
-                            text = "文件名：${viewModel.suggestedName()}",
+                            text = stringResource(R.string.file_name_viewmodel_suggestedname, viewModel.suggestedName()),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.outline,
                         )
@@ -171,7 +175,7 @@ fun ExportScreen(
                 ) {
                     Icon(Icons.Outlined.FileDownload, contentDescription = null)
                     Text(
-                        text = if (state.busy) "导出中…" else "选择保存位置并导出",
+                        text = if (state.busy) stringResource(R.string.exporting) else stringResource(R.string.choose_a_location_and_export),
                         modifier = Modifier.padding(start = 8.dp),
                     )
                 }

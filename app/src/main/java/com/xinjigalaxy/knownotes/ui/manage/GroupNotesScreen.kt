@@ -1,12 +1,14 @@
 package com.xinjigalaxy.knownotes.ui.manage
 
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.res.stringResource
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.xinjigalaxy.knownotes.R
 import com.xinjigalaxy.knownotes.data.model.NoteWithTags
 import com.xinjigalaxy.knownotes.data.prefs.UiPrefs
 import com.xinjigalaxy.knownotes.data.repo.NoteRepository
@@ -27,7 +29,7 @@ class GroupNotesViewModel(
 ) : ViewModel() {
 
     data class UiState(
-        val title: String = "分组",
+        val title: String? = null,
         val notes: List<NoteWithTags> = emptyList(),
         val layout: NoteLayout = NoteLayout.LIST,
     )
@@ -42,7 +44,7 @@ class GroupNotesViewModel(
         layout,
     ) { groups, notes, id, currentLayout ->
         UiState(
-            title = groups.firstOrNull { it.id == id }?.name ?: "分组",
+            title = groups.firstOrNull { it.id == id }?.name,
             notes = notes.filter { it.note.groupId == id },
             layout = currentLayout,
         )
@@ -70,10 +72,10 @@ fun GroupNotesScreen(
     val state by viewModel.uiState.collectAsStateWithLifecycle()
 
     NoteCollectionScreen(
-        title = state.title,
+        title = state.title ?: stringResource(R.string.groups),
         notes = state.notes,
         layout = state.layout,
-        filterHint = "在本分组内筛选",
+        filterHint = stringResource(R.string.filter_within_this_group),
         onToggleLayout = viewModel::toggleLayout,
         onOpenNote = onOpenNote,
         onBack = onBack,

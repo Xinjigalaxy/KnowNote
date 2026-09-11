@@ -2,6 +2,7 @@ package com.xinjigalaxy.knownotes.ui.more
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.xinjigalaxy.knownotes.R
 import com.xinjigalaxy.knownotes.data.model.SyncLogEntry
 import com.xinjigalaxy.knownotes.data.prefs.UiPrefs
 import com.xinjigalaxy.knownotes.data.repo.NoteRepository
@@ -11,6 +12,7 @@ import com.xinjigalaxy.knownotes.data.sync.SyncClient
 import com.xinjigalaxy.knownotes.data.sync.SyncCoordinator
 import com.xinjigalaxy.knownotes.data.sync.SyncServer
 import com.xinjigalaxy.knownotes.data.sync.parseSyncAddress
+import com.xinjigalaxy.knownotes.ui.components.UiMessage
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -54,7 +56,7 @@ class SyncViewModel(
         val peer: String = "",
         val lastSyncAt: Long = 0L,
         val busy: Boolean = false,
-        val message: String? = null,
+        val message: UiMessage? = null,
         val log: List<SyncLogEntry> = emptyList(),
     )
 
@@ -110,7 +112,7 @@ class SyncViewModel(
     fun regenerateKey() {
         val fresh = generateKey()
         prefs.saveSyncKey(fresh)
-        local.update { it.copy(key = fresh, message = "密钥已更换 —— 另一台设备也要填成这一串") }
+        local.update { it.copy(key = fresh, message = UiMessage(R.string.key_changed_enter_the_same_one_on_the_other_devi)) }
     }
 
     fun setPeer(text: String) {
@@ -123,7 +125,7 @@ class SyncViewModel(
     fun startHost() {
         val port = local.value.portText.toIntOrNull()
         if (port == null || port !in 1..65535) {
-            local.update { it.copy(message = "端口要在 1–65535 之间") }
+            local.update { it.copy(message = UiMessage(R.string.port_must_be_between_1_and_65535)) }
             return
         }
         val key = ensureKey()
@@ -131,24 +133,35 @@ class SyncViewModel(
         server.start(appScope, port, key)
             .onSuccess {
                 prefs.saveHostAutoStart(true)
-                val ip = LanInfo.ipv4Addresses().firstOrNull() ?: "本机IP"
+                val ip = LanInfo.ipv4Addresses().firstOrNull()
                 local.update {
                     it.copy(
                         hostAutoStart = true,
                         addresses = LanInfo.ipv4Addresses(),
-                        message = "主机已启动：另一台设备填 $ip:$port",
+                        // 没有局域网地址时，占位符里放「本机 IP」这条提示本身
+                        message = UiMessage(
+                            R.string.host_started_enter_ip_port_on_the_other_device,
+                            listOf(ip ?: UiMessage(R.string.local_ip), port),
+                        ),
                     )
                 }
             }
             .onFailure { e ->
-                local.update { it.copy(message = "主机启动失败：${e.message}") }
+                local.update {
+                    it.copy(
+                        message = UiMessage(
+                            R.string.failed_to_start_host_e_message,
+                            listOf(e.message ?: e.javaClass.simpleName),
+                        ),
+                    )
+                }
             }
     }
 
     fun stopHost() {
         server.stop()
         prefs.saveHostAutoStart(false)
-        local.update { it.copy(hostAutoStart = false, message = "主机已停止监听") }
+        local.update { it.copy(hostAutoStart = false, message = UiMessage(R.string.host_stopped_listening)) }
     }
 
     // ---------- 从机 ----------
@@ -156,19 +169,30 @@ class SyncViewModel(
     fun pingHost() {
         val parsed = parseSyncAddress(local.value.peer)
         if (parsed == null) {
-            local.update { it.copy(message = "主机地址填得不对，示例：192.168.1.20 或 192.168.1.20:8765") }
+            local.update { it.copy(message = UiMessage(R.string.invalid_host_address_e_g_192_168_1_20_or_192_168)) }
             return
         }
-        local.update { it.copy(busy = true, message = "正在探测 ${parsed.first}:${parsed.second} …") }
+        local.update {
+            it.copy(
+                busy = true,
+                message = UiMessage(R.string.probing_parsed_first_parsed_second, listOf(parsed.first, parsed.second)),
+            )
+        }
         viewModelScope.launch {
             val reachable = client.ping(parsed.first, parsed.second)
             local.update {
                 it.copy(
                     busy = false,
                     message = if (reachable) {
-                        "能连通 ${parsed.first}:${parsed.second}（主机在线）"
+                        UiMessage(
+                            R.string.reachable_parsed_first_parsed_second_host_is_onl,
+                            listOf(parsed.first, parsed.second),
+                        )
                     } else {
-                        "连不上 ${parsed.first}:${parsed.second} —— 检查两台设备是否同一 WiFi、主机是否已启动"
+                        UiMessage(
+                            R.string.cannot_reach_parsed_first_parsed_second_check_th,
+                            listOf(parsed.first, parsed.second),
+                        )
                     },
                 )
             }
@@ -179,15 +203,20 @@ class SyncViewModel(
         val state = local.value
         val parsed = parseSyncAddress(state.peer)
         if (parsed == null) {
-            local.update { it.copy(message = "主机地址填得不对，示例：192.168.1.20 或 192.168.1.20:8765") }
+            local.update { it.copy(message = UiMessage(R.string.invalid_host_address_e_g_192_168_1_20_or_192_168)) }
             return
         }
         if (state.key.isBlank()) {
-            local.update { it.copy(message = "请先填共享密钥（要和主机一致）") }
+            local.update { it.copy(message = UiMessage(R.string.enter_the_shared_key_first_it_must_match_the_hos)) }
             return
         }
         val (host, port) = parsed
-        local.update { it.copy(busy = true, message = "正在与 $host:$port 同步…") }
+        local.update {
+            it.copy(
+                busy = true,
+                message = UiMessage(R.string.syncing_with_host_port, listOf(host, port)),
+            )
+        }
 
         viewModelScope.launch {
             // 一次同步的完整流程（取增量 / 发送 / 落库 / 水位线 / 日志）在 SyncCoordinator 里，
@@ -198,20 +227,38 @@ class SyncViewModel(
                         it.copy(
                             busy = false,
                             lastSyncAt = session.watermark,
-                            message = buildString {
-                                append(
-                                    "同步完成：拉到 ${session.pulled} 条，本机落库 ${session.applied.changed} 条，" +
-                                        "推过去 ${session.pushed} 条（主机落库 ${session.peerApplied} 条）"
-                                )
+                            // 摘要由三段资源拼成，时间戳打平那条只在有冲突时出现
+                            message = UiMessage.concat(
+                                UiMessage(
+                                    R.string.sync_complete_pulled_session_pulled_applied_sess,
+                                    listOf(session.pulled, session.applied.changed),
+                                ),
+                                UiMessage(
+                                    R.string.pushed_session_pushed_host_applied_session_peera,
+                                    listOf(session.pushed, session.peerApplied),
+                                ),
                                 if (session.conflicts > 0) {
-                                    append("；时间戳打平 ${session.conflicts} 条（按内容取较大版以保证两端收敛）")
-                                }
-                            },
+                                    UiMessage(
+                                        R.string.session_conflicts_timestamp_conflicts_resolved_l,
+                                        listOf(session.conflicts),
+                                    )
+                                } else {
+                                    null
+                                },
+                            ),
                         )
                     }
                 }
                 .onFailure { e ->
-                    local.update { it.copy(busy = false, message = "同步失败：${e.message}") }
+                    local.update {
+                        it.copy(
+                            busy = false,
+                            message = UiMessage(
+                                R.string.sync_failed_e_message,
+                                listOf(e.message ?: e.javaClass.simpleName),
+                            ),
+                        )
+                    }
                 }
         }
     }

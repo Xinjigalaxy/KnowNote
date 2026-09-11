@@ -40,6 +40,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.res.stringResource
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -49,6 +50,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
+import com.xinjigalaxy.knownotes.R
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.xinjigalaxy.knownotes.ui.AppViewModelProvider
@@ -83,23 +85,23 @@ fun NoteEditScreen(
             TopAppBar(
                 navigationIcon = {
                     IconButton(onClick = { viewModel.saveOnExit(tagInput, onDone) }) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.back))
                     }
                 },
-                title = { Text(if (state.isNew) "新建知识点" else "编辑知识点") },
+                title = { Text(if (state.isNew) stringResource(R.string.new_note) else stringResource(R.string.edit_note)) },
                 actions = {
                     IconButton(onClick = { viewModel.setPreview(!state.preview) }) {
                         Icon(
                             imageVector = if (state.preview) Icons.Outlined.Edit else Icons.Outlined.Visibility,
-                            contentDescription = if (state.preview) "切到编辑" else "预览 Markdown",
+                            contentDescription = if (state.preview) stringResource(R.string.switch_to_edit) else stringResource(R.string.preview_markdown),
                         )
                     }
                     if (!state.isNew) {
                         IconButton(onClick = { confirmDelete = true }) {
-                            Icon(Icons.Outlined.DeleteOutline, contentDescription = "删除")
+                            Icon(Icons.Outlined.DeleteOutline, contentDescription = stringResource(R.string.delete))
                         }
                     }
-                    TextButton(onClick = { viewModel.save(tagInput) { onDone() } }) { Text("保存") }
+                    TextButton(onClick = { viewModel.save(tagInput) { onDone() } }) { Text(stringResource(R.string.save)) }
                 },
             )
         },
@@ -128,7 +130,7 @@ fun NoteEditScreen(
                 value = state.title,
                 onValueChange = viewModel::setTitle,
                 modifier = Modifier.fillMaxWidth(),
-                label = { Text("标题") },
+                label = { Text(stringResource(R.string.title)) },
                 singleLine = true,
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
             )
@@ -139,13 +141,13 @@ fun NoteEditScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .heightIn(min = 200.dp),
-                label = { Text("正文") },
-                placeholder = { Text("零碎知识点随手记，支持代码片段原样粘贴") },
+                label = { Text(stringResource(R.string.body)) },
+                placeholder = { Text(stringResource(R.string.jot_fragmented_notes_anytime_code_snippets_paste)) },
             )
 
             HorizontalDivider()
 
-            Text("分组", style = MaterialTheme.typography.titleSmall)
+            Text(stringResource(R.string.groups), style = MaterialTheme.typography.titleSmall)
             LazyRow(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 contentPadding = PaddingValues(horizontal = 2.dp),
@@ -154,7 +156,7 @@ fun NoteEditScreen(
                     FilterChip(
                         selected = state.groupId == null,
                         onClick = { viewModel.setGroup(null) },
-                        label = { Text("无分组") },
+                        label = { Text(stringResource(R.string.no_group)) },
                     )
                 }
                 items(groups, key = { it.id }) { group ->
@@ -169,12 +171,12 @@ fun NoteEditScreen(
                 item {
                     AssistChip(
                         onClick = { showNewGroup = true },
-                        label = { Text("＋ 新建分组") },
+                        label = { Text(stringResource(R.string.new_group_2)) },
                     )
                 }
             }
 
-            Text("标签", style = MaterialTheme.typography.titleSmall)
+            Text(stringResource(R.string.tags), style = MaterialTheme.typography.titleSmall)
             FlowRow(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -182,7 +184,7 @@ fun NoteEditScreen(
                 val names = (existingTags.map { it.name } + state.tags).distinct().sorted()
                 if (names.isEmpty()) {
                     Text(
-                        text = "还没有标签，下面输入即可新建",
+                        text = stringResource(R.string.no_tags_yet_type_below_to_create_one),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.outline,
                     )
@@ -203,7 +205,7 @@ fun NoteEditScreen(
                             viewModel.addTag(pending)
                             tagInput = ""
                         },
-                        label = { Text("＋ 新建「$pending」") },
+                        label = { Text(stringResource(R.string.new_pending, pending)) },
                     )
                 }
             }
@@ -213,7 +215,7 @@ fun NoteEditScreen(
                     value = tagInput,
                     onValueChange = { tagInput = it },
                     modifier = Modifier.weight(1f),
-                    label = { Text("添加标签") },
+                    label = { Text(stringResource(R.string.add_tag)) },
                     singleLine = true,
                     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
                     keyboardActions = KeyboardActions(
@@ -230,13 +232,13 @@ fun NoteEditScreen(
                         tagInput = ""
                     },
                 ) {
-                    Icon(Icons.Filled.Add, contentDescription = "添加标签")
+                    Icon(Icons.Filled.Add, contentDescription = stringResource(R.string.add_tag))
                 }
             }
 
             if (!state.isNew) {
                 Text(
-                    text = "创建于 ${formatFullTime(state.createdAt)} · 更新于 ${formatFullTime(state.updatedAt)}",
+                    text = stringResource(R.string.created_formatfulltime_state_createdat_updated_f, formatFullTime(state.createdAt), formatFullTime(state.updatedAt)),
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.outline,
                 )
@@ -247,12 +249,12 @@ fun NoteEditScreen(
     if (showNewGroup) {
         AlertDialog(
             onDismissRequest = { showNewGroup = false },
-            title = { Text("新建分组") },
+            title = { Text(stringResource(R.string.new_group)) },
             text = {
                 OutlinedTextField(
                     value = newGroupName,
                     onValueChange = { newGroupName = it },
-                    label = { Text("分组名") },
+                    label = { Text(stringResource(R.string.group_name)) },
                     singleLine = true,
                 )
             },
@@ -261,24 +263,24 @@ fun NoteEditScreen(
                     viewModel.createGroup(newGroupName)
                     newGroupName = ""
                     showNewGroup = false
-                }) { Text("创建") }
+                }) { Text(stringResource(R.string.create)) }
             },
-            dismissButton = { TextButton(onClick = { showNewGroup = false }) { Text("取消") } },
+            dismissButton = { TextButton(onClick = { showNewGroup = false }) { Text(stringResource(R.string.cancel)) } },
         )
     }
 
     if (confirmDelete) {
         AlertDialog(
             onDismissRequest = { confirmDelete = false },
-            title = { Text("删除这条知识点？") },
-            text = { Text("笔记会进入回收站（软删除），可随时恢复，也可以在那里彻底清除。") },
+            title = { Text(stringResource(R.string.delete_this_note)) },
+            text = { Text(stringResource(R.string.the_note_goes_to_trash_soft_delete_and_can_be_re)) },
             confirmButton = {
                 TextButton(onClick = {
                     confirmDelete = false
                     viewModel.delete(onDone)
-                }) { Text("删除") }
+                }) { Text(stringResource(R.string.delete)) }
             },
-            dismissButton = { TextButton(onClick = { confirmDelete = false }) { Text("取消") } },
+            dismissButton = { TextButton(onClick = { confirmDelete = false }) { Text(stringResource(R.string.cancel)) } },
         )
     }
 }
@@ -298,7 +300,7 @@ private fun NotePreviewBody(state: NoteEditViewModel.State, modifier: Modifier =
         }
         if (state.content.isBlank()) {
             Text(
-                text = "正文还是空的，点右上角切回编辑写点什么",
+                text = stringResource(R.string.body_is_still_empty_tap_the_top_right_to_switch_),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.outline,
             )
@@ -313,7 +315,7 @@ private fun NotePreviewBody(state: NoteEditViewModel.State, modifier: Modifier =
             }
         }
         Text(
-            text = "预览模式 · 支持 # 标题、**粗体**、`代码`、``` 代码块、- 列表、> 引用",
+            text = stringResource(R.string.preview_mode_supports_headings_bold_code_blocks_),
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.outline,
         )

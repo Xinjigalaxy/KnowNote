@@ -31,6 +31,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.res.stringResource
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -42,11 +43,13 @@ import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.xinjigalaxy.knownotes.R
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.xinjigalaxy.knownotes.data.model.SyncLogEntry
 import com.xinjigalaxy.knownotes.ui.AppViewModelProvider
 import com.xinjigalaxy.knownotes.ui.components.formatTime
+import com.xinjigalaxy.knownotes.ui.components.rendered
 
 /**
  * 局域网同步页（需求文档 4 / 7 第三阶段）。
@@ -70,10 +73,10 @@ fun SyncScreen(
             TopAppBar(
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.back))
                     }
                 },
-                title = { Text("局域网同步") },
+                title = { Text(stringResource(R.string.lan_sync)) },
             )
         },
     ) { innerPadding ->
@@ -85,21 +88,21 @@ fun SyncScreen(
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             item {
-                SectionCard(title = "本机") {
-                    KeyValue("设备名", state.deviceName)
-                    KeyValue("设备 ID", state.deviceId)
+                SectionCard(title = stringResource(R.string.this_device)) {
+                    KeyValue(stringResource(R.string.device_name), state.deviceName)
+                    KeyValue(stringResource(R.string.device_id), state.deviceId)
                     KeyValue(
-                        "局域网地址",
-                        state.addresses.joinToString(" / ").ifBlank { "未连上局域网（先连 WiFi）" },
+                        stringResource(R.string.lan_address),
+                        state.addresses.joinToString(" / ").ifBlank { stringResource(R.string.not_on_a_lan_connect_to_wi_fi_first) },
                     )
-                    TextButton(onClick = viewModel::refreshAddresses) { Text("刷新地址") }
+                    TextButton(onClick = viewModel::refreshAddresses) { Text(stringResource(R.string.refresh_address)) }
                 }
             }
 
             item {
-                SectionCard(title = "共享密钥") {
+                SectionCard(title = stringResource(R.string.shared_key)) {
                     Text(
-                        text = "两台设备必须填同一串，否则主机会直接拒绝（401）。这个串是唯一的门槛，别用 trivial 的。",
+                        text = stringResource(R.string.both_devices_must_use_the_same_key_or_the_host_r),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -107,21 +110,21 @@ fun SyncScreen(
                         value = state.key,
                         onValueChange = viewModel::setKey,
                         modifier = Modifier.fillMaxWidth(),
-                        label = { Text("密钥") },
+                        label = { Text(stringResource(R.string.key)) },
                         singleLine = true,
                         textStyle = MaterialTheme.typography.bodyMedium.copy(fontFamily = FontFamily.Monospace),
                     )
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         TextButton(onClick = {
                             clipboard.setText(AnnotatedString(state.key))
-                        }) { Text("复制") }
-                        TextButton(onClick = viewModel::regenerateKey) { Text("重新生成") }
+                        }) { Text(stringResource(R.string.copy)) }
+                        TextButton(onClick = viewModel::regenerateKey) { Text(stringResource(R.string.regenerate)) }
                     }
                 }
             }
 
             item {
-                SectionCard(title = "主机模式（本机当主机）") {
+                SectionCard(title = stringResource(R.string.host_mode_this_device_hosts)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Switch(
                             checked = state.hostRunning,
@@ -132,7 +135,7 @@ fun SyncScreen(
                         Spacer(Modifier.width(12.dp))
                         Column {
                             Text(
-                                text = if (state.hostRunning) "监听中 · ${state.hostPort}" else "未启动",
+                                text = if (state.hostRunning) stringResource(R.string.listening_state_hostport, state.hostPort) else stringResource(R.string.not_started),
                                 style = MaterialTheme.typography.titleSmall,
                                 fontWeight = FontWeight.Medium,
                                 color = if (state.hostRunning) {
@@ -143,9 +146,9 @@ fun SyncScreen(
                             )
                             Text(
                                 text = if (state.hostRunning) {
-                                    "已接待 ${state.servedRequests} 次同步请求"
+                                    stringResource(R.string.served_state_servedrequests_sync_requests, state.servedRequests)
                                 } else {
-                                    "打开后其他设备才能连过来"
+                                    stringResource(R.string.other_devices_can_connect_only_after_you_turn_it)
                                 },
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.outline,
@@ -156,19 +159,19 @@ fun SyncScreen(
                         value = state.portText,
                         onValueChange = viewModel::setPort,
                         modifier = Modifier.fillMaxWidth(),
-                        label = { Text("端口") },
+                        label = { Text(stringResource(R.string.port)) },
                         singleLine = true,
                         enabled = !state.hostRunning,
                     )
                     state.hostError?.let {
                         Text(
-                            text = "服务出错：$it",
+                            text = stringResource(R.string.service_error_it, it),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.error,
                         )
                     }
                     Text(
-                        text = "主机只在应用运行期间有效：这一版没做前台 Service，切后台久了会被系统回收。",
+                        text = stringResource(R.string.the_host_is_valid_only_while_the_app_runs_this_v),
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.outline,
                     )
@@ -176,34 +179,34 @@ fun SyncScreen(
             }
 
             item {
-                SectionCard(title = "从机模式（去拉主机）") {
+                SectionCard(title = stringResource(R.string.client_mode_pull_from_host)) {
                     OutlinedTextField(
                         value = state.peer,
                         onValueChange = viewModel::setPeer,
                         modifier = Modifier.fillMaxWidth(),
-                        label = { Text("主机地址") },
-                        placeholder = { Text("192.168.1.20 或 192.168.1.20:8765") },
+                        label = { Text(stringResource(R.string.host_address)) },
+                        placeholder = { Text(stringResource(R.string.s_192_168_1_20_or_192_168_1_20_8765)) },
                         singleLine = true,
                     )
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         OutlinedButton(
                             onClick = viewModel::pingHost,
                             enabled = !state.busy,
-                        ) { Text("探测连通") }
+                        ) { Text(stringResource(R.string.test_connection)) }
                         Button(
                             onClick = viewModel::syncNow,
                             enabled = !state.busy,
                         ) {
                             Icon(Icons.Outlined.Sync, contentDescription = null)
                             Spacer(Modifier.width(6.dp))
-                            Text(if (state.busy) "同步中…" else "开始同步")
+                            Text(if (state.busy) stringResource(R.string.syncing) else stringResource(R.string.start_sync))
                         }
                     }
                     Text(
                         text = if (state.lastSyncAt > 0L) {
-                            "上次同步水位线：${formatTime(state.lastSyncAt)}"
+                            stringResource(R.string.last_sync_watermark_formattime_state_lastsyncat, formatTime(state.lastSyncAt))
                         } else {
-                            "还没同步过"
+                            stringResource(R.string.never_synced)
                         },
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.outline,
@@ -221,7 +224,7 @@ fun SyncScreen(
                         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
                     ) {
                         Text(
-                            text = message,
+                            text = message.rendered(),
                             modifier = Modifier.padding(16.dp),
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSecondaryContainer,
@@ -233,13 +236,13 @@ fun SyncScreen(
             item {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
-                        text = "同步日志",
+                        text = stringResource(R.string.sync_log),
                         style = MaterialTheme.typography.titleSmall,
                         fontWeight = FontWeight.Medium,
                     )
                     Spacer(Modifier.width(8.dp))
                     Text(
-                        text = "最近 ${state.log.size} 条",
+                        text = stringResource(R.string.latest_state_log_size, state.log.size),
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.outline,
                     )
@@ -252,7 +255,7 @@ fun SyncScreen(
                                 modifier = Modifier.width(18.dp),
                             )
                             Spacer(Modifier.width(4.dp))
-                            Text("清空")
+                            Text(stringResource(R.string.clear))
                         }
                     }
                 }
@@ -261,7 +264,7 @@ fun SyncScreen(
             if (state.log.isEmpty()) {
                 item {
                     Text(
-                        text = "还没有同步记录。第一次同步之后，这里会显示拉了/推了多少条、有没有冲突。",
+                        text = stringResource(R.string.no_sync_records_yet_after_the_first_sync_this_sh),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.outline,
                     )
@@ -288,7 +291,7 @@ private fun SyncLogCard(entry: SyncLogEntry) {
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
-                    text = if (entry.role == SyncLogEntry.ROLE_HOST) "接客（主机）" else "上门（从机）",
+                    text = if (entry.role == SyncLogEntry.ROLE_HOST) stringResource(R.string.serving_host) else stringResource(R.string.outbound_client),
                     style = MaterialTheme.typography.labelMedium,
                     fontWeight = FontWeight.Medium,
                     color = if (entry.ok) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,
@@ -308,8 +311,8 @@ private fun SyncLogCard(entry: SyncLogEntry) {
             }
             if (entry.ok) {
                 Text(
-                    text = "拉取 ${entry.pulled} 条 · 推送 ${entry.pushed} 条" +
-                        if (entry.conflicts > 0) " · 打平 ${entry.conflicts} 条" else "",
+                    text = stringResource(R.string.pulled_entry_pulled_pushed_entry_pushed, entry.pulled, entry.pushed) +
+                        if (entry.conflicts > 0) stringResource(R.string.entry_conflicts_conflicts_resolved, entry.conflicts) else "",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )

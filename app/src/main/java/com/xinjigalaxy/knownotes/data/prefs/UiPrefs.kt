@@ -114,6 +114,13 @@ class UiPrefs(context: Context) {
         prefs.edit().putLong(KEY_LAST_PURGE_AT, at).putInt(KEY_LAST_PURGE_COUNT, count).apply()
     }
 
+    /** 应用内语言 tag（空串 = 跟随系统）。 */
+    fun appLanguage(): String = prefs.getString(KEY_LANGUAGE, "").orEmpty()
+
+    fun saveAppLanguage(tag: String) {
+        prefs.edit().putString(KEY_LANGUAGE, tag).apply()
+    }
+
     private companion object {
         const val KEY_GROUP_FILTER = "filter_group"
         const val KEY_TAG_FILTER = "filter_tags"
@@ -128,6 +135,7 @@ class UiPrefs(context: Context) {
         const val KEY_PURGE_DAYS = "trash_retention_days"
         const val KEY_LAST_PURGE_AT = "trash_last_purge_at"
         const val KEY_LAST_PURGE_COUNT = "trash_last_purge_count"
+        const val KEY_LANGUAGE = "app_language"
         const val DEFAULT_RETENTION_DAYS = 30
     }
 }

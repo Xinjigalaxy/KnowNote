@@ -40,7 +40,7 @@ class SyncCoordinator(
 
         val response = outcome.response
         if (response == null) {
-            val reason = outcome.error ?: "未知错误"
+            val reason = outcome.error ?: "Unknown error"
             repo.logSync(
                 SyncLogEntry(
                     role = SyncLogEntry.ROLE_CLIENT,
@@ -69,7 +69,7 @@ class SyncCoordinator(
                 pushed = outgoing.size,
                 conflicts = conflicts,
                 ok = true,
-                message = "本机落库 ${applied.changed} 条（新增 ${applied.inserted} / 更新 ${applied.updated}）",
+                message = "applied ${applied.changed} locally (${applied.inserted} new / ${applied.updated} updated)",
             )
         )
 

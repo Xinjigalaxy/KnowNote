@@ -5,6 +5,7 @@ import androidx.lifecycle.viewmodel.CreationExtras
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import com.xinjigalaxy.knownotes.KnowNoteApp
+import com.xinjigalaxy.knownotes.data.settings.AppLocales
 import com.xinjigalaxy.knownotes.data.settings.TrashCleanupScheduler
 import com.xinjigalaxy.knownotes.ui.manage.GroupNotesViewModel
 import com.xinjigalaxy.knownotes.ui.manage.GroupViewModel
@@ -36,6 +37,7 @@ object AppViewModelProvider {
                 settings = app().container.settings,
                 prefs = app().container.uiPrefs,
                 scheduleCleanup = { enabled -> TrashCleanupScheduler.apply(app(), enabled) },
+                applyLocale = { language -> AppLocales.apply(app(), language) },
             )
         }
         initializer {

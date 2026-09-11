@@ -1,5 +1,7 @@
 package com.xinjigalaxy.knownotes.data.settings
 
+import androidx.annotation.StringRes
+import com.xinjigalaxy.knownotes.R
 import com.xinjigalaxy.knownotes.data.prefs.UiPrefs
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -13,11 +15,12 @@ enum class ThemeMode {
     DARK,
     ;
 
-    val label: String
+    @get:StringRes
+    val labelRes: Int
         get() = when (this) {
-            SYSTEM -> "跟随系统"
-            LIGHT -> "浅色"
-            DARK -> "深色"
+            SYSTEM -> R.string.system_default
+            LIGHT -> R.string.light
+            DARK -> R.string.dark
         }
 
     companion object {
@@ -39,6 +42,7 @@ class AppSettings(private val prefs: UiPrefs) {
         val dynamicColor: Boolean = false,
         val autoPurgeTrash: Boolean = false,
         val trashRetentionDays: Int = DEFAULT_RETENTION_DAYS,
+        val language: AppLanguage = AppLanguage.SYSTEM,
     )
 
     private val _state = MutableStateFlow(read())
@@ -49,7 +53,13 @@ class AppSettings(private val prefs: UiPrefs) {
         dynamicColor = prefs.dynamicColor(),
         autoPurgeTrash = prefs.autoPurgeTrash(),
         trashRetentionDays = prefs.trashRetentionDays(),
+        language = AppLanguage.fromTag(prefs.appLanguage()),
     )
+
+    fun setLanguage(language: AppLanguage) {
+        prefs.saveAppLanguage(language.tag)
+        _state.update { it.copy(language = language) }
+    }
 
     fun setThemeMode(mode: ThemeMode) {
         prefs.saveThemeMode(mode.name)

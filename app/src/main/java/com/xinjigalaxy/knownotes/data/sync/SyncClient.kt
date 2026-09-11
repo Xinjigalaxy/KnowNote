@@ -72,11 +72,11 @@ class SyncClient(
             } else {
                 val json = runCatching { JSONObject(text) }.getOrNull()
                 if (json == null) {
-                    Outcome(error = "主机返回的不是合法 JSON")
+                    Outcome(error = "Host returned invalid JSON")
                 } else {
                     val response = SyncResponse.fromJson(json)
                     if (response.protocol != SYNC_PROTOCOL) {
-                        Outcome(error = "协议版本不一致（主机 $SYNC_PROTOCOL 期望 ${response.protocol}）")
+                        Outcome(error = "Protocol mismatch (host expects $SYNC_PROTOCOL, got ${response.protocol})")
                     } else {
                         Outcome(response = response)
                     }

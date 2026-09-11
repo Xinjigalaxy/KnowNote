@@ -9,9 +9,9 @@ import com.xinjigalaxy.knownotes.data.fts.FtsText
  * 本机 SQLite 实际支持的全文检索能力。
  */
 enum class FtsEngine(val label: String, val description: String) {
-    FTS5("FTS5", "SQLite 官方全文检索扩展，支持 bm25 相关度排序"),
-    FTS4("FTS4", "老一代全文检索扩展，Android 系统 SQLite 稳定内置"),
-    NONE("LIKE 兜底", "没有可用全文索引，退化为 LIKE 子串扫描"),
+    FTS5("FTS5", "SQLite's official full-text extension, supports bm25 ranking"),
+    FTS4("FTS4", "Previous-generation full-text extension, bundled in Android's SQLite"),
+    NONE("LIKE fallback", "No full-text index available, falling back to a LIKE substring scan"),
     ;
 
     val isFullText: Boolean get() = this != NONE
@@ -63,7 +63,7 @@ class FtsStore(private val appDatabase: AppDatabase) {
             sql.setTransactionSuccessful()
         } catch (t: Throwable) {
             // 索引写失败不能影响主业务入库
-            Log.w(TAG, "写入 FTS 索引失败（rowid=$noteId）: ${t.message}")
+            Log.w(TAG, "FTS index write failed (rowid=$noteId): ${t.message}")
         } finally {
             sql.endTransaction()
         }
@@ -97,7 +97,7 @@ class FtsStore(private val appDatabase: AppDatabase) {
                 }
                 return ids
             } catch (t: Throwable) {
-                Log.w(TAG, "检索语句失败，尝试降级：${t.message}")
+                Log.w(TAG, "Query failed, trying to fall back: ${t.message}")
             }
         }
         return emptyList()
@@ -126,12 +126,12 @@ class FtsStore(private val appDatabase: AppDatabase) {
 
         /** 设备 SQLite 版本，诊断用（不同 Android 版本差异很大）。 */
         @Volatile
-        var sqliteVersion: String = "未知"
+        var sqliteVersion: String = "unknown"
             private set
 
         /** 本次判定走了哪条路径，实机排查全靠它。 */
         @Volatile
-        var lastDecision: String = "尚未探测"
+        var lastDecision: String = "not probed yet"
             private set
 
         /**
@@ -146,23 +146,23 @@ class FtsStore(private val appDatabase: AppDatabase) {
                     FtsEngine.NONE -> {
                         // 名字被占但没有可用的虚拟表（残留 / 类型不对）：清掉后按正常流程重建
                         if (dropUnusable(db)) {
-                            createFresh(db, prefix = "清理不可用表后重建")
+                            createFresh(db, prefix = "Rebuilt after clearing unusable tables")
                         } else {
                             engine = FtsEngine.NONE
-                            lastDecision = "同名表不可用且删不掉，降级 LIKE"
+                            lastDecision = "Existing table unusable and cannot be dropped; falling back to LIKE"
                         }
                     }
 
                     else -> {
                         engine = existing
-                        lastDecision = "沿用已有 ${existing.label} 索引"
+                        lastDecision = "Reusing existing ${existing.label} index"
                     }
                 }
                 return
             }
 
             // 情形二：全新库
-            createFresh(db, prefix = "新建")
+            createFresh(db, prefix = "Created")
         }
 
         private fun createFresh(db: SupportSQLiteDatabase, prefix: String) {
@@ -171,7 +171,7 @@ class FtsStore(private val appDatabase: AppDatabase) {
                 moduleAvailable(db, "fts4") && tryExec(db, DDL_FTS4, "FTS4") -> FtsEngine.FTS4
                 else -> FtsEngine.NONE
             }
-            lastDecision = if (engine.isFullText) "$prefix ${engine.label} 索引" else "无可用全文引擎，降级 LIKE"
+            lastDecision = if (engine.isFullText) "$prefix ${engine.label} index" else "No usable full-text engine; falling back to LIKE"
         }
 
         /**
@@ -183,8 +183,8 @@ class FtsStore(private val appDatabase: AppDatabase) {
                 db.query("SELECT rowid FROM $TABLE WHERE $TABLE MATCH ? LIMIT 1", arrayOf<Any?>("x*")).close()
             }
             if (plain.isFailure) {
-                probeError = "已有 $TABLE 不可用：${plain.exceptionOrNull()?.message}"
-                Log.w(TAG, "已有 $TABLE 无法用于检索：${plain.exceptionOrNull()?.message}")
+                probeError = "Existing $TABLE unusable: ${plain.exceptionOrNull()?.message}"
+                Log.w(TAG, "Existing $TABLE cannot be used for search: ${plain.exceptionOrNull()?.message}")
                 return FtsEngine.NONE
             }
             val ranked = runCatching {
@@ -206,7 +206,7 @@ class FtsStore(private val appDatabase: AppDatabase) {
                 true
             } catch (t: Throwable) {
                 probeError = "$module: ${t.message}"
-                Log.w(TAG, "全文检索引擎 $module 不可用: ${t.message}")
+                Log.w(TAG, "Full-text engine $module unavailable: ${t.message}")
                 runCatching { db.execSQL("DROP TABLE IF EXISTS temp.$probe") }
                 false
             }
@@ -217,7 +217,7 @@ class FtsStore(private val appDatabase: AppDatabase) {
             true
         } catch (t: Throwable) {
             probeError = "$name: ${t.message}"
-            Log.w(TAG, "建表失败 $name: ${t.message}")
+            Log.w(TAG, "Creating table $name failed: ${t.message}")
             false
         }
 
@@ -236,7 +236,7 @@ class FtsStore(private val appDatabase: AppDatabase) {
             db.execSQL("DROP TABLE IF EXISTS $TABLE")
             !nameTaken(db)
         } catch (t: Throwable) {
-            Log.w(TAG, "清理不可用的 $TABLE 失败：${t.message}")
+            Log.w(TAG, "Dropping unusable $TABLE failed: ${t.message}")
             false
         }
 
@@ -246,7 +246,7 @@ class FtsStore(private val appDatabase: AppDatabase) {
                     if (c.moveToFirst()) sqliteVersion = c.getString(0)
                 }
             } catch (t: Throwable) {
-                sqliteVersion = "未知"
+                sqliteVersion = "unknown"
             }
         }
 
@@ -261,9 +261,9 @@ class FtsStore(private val appDatabase: AppDatabase) {
             try {
                 reindexAll(db)
                 db.setTransactionSuccessful()
-                Log.i(TAG, "FTS 索引条数对不上（$indexed → $live），已整体重建")
+                Log.i(TAG, "FTS index count mismatch ($indexed -> $live), rebuilt from scratch")
             } catch (t: Throwable) {
-                Log.e(TAG, "重建 FTS 索引失败: ${t.message}")
+                Log.e(TAG, "Rebuilding FTS index failed: ${t.message}")
             } finally {
                 db.endTransaction()
             }

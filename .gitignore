@@ -18,8 +18,14 @@ local.properties
 # ---- 手工留存的中间数据（数据库副本 / 演示灌库产物） ----
 seed/
 
+# ---- 开发过程中的真机/模拟器截图 ----
+# 这些是本地验证时随手截的，含设备标识、同步共享密钥、局域网地址与本机笔记内容，
+# 不进公开仓库。要给 README 用的截图放在 docs/screenshots/（脱敏后）。
+lg-shots/
+demo-shots/
+
 # 注意：以下内容**必须**入库，不要加进 ignore
 #   gradle/wrapper/gradle-wrapper.jar   —— 没有它 clone 下来跑不了 ./gradlew
 #   gradle/wrapper/gradle-wrapper.properties
 #   app/schemas/**                      —— Room 导出的 schema，迁移要靠它比对
-#   demo-shots/**                       —— README 引用的界面截图
+#   docs/screenshots/**                 —— README 引用的界面截图（已脱敏）
