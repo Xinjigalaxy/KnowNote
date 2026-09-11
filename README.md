@@ -172,8 +172,9 @@ W KnowNote: 全文检索引擎 FTS4 不可用: table notes_fts already exists ..
 | --- | --- |
 | `:app:assembleDebug` / `assembleRelease` | BUILD SUCCESSFUL |
 | 单元测试 `FtsTextTest` | 8/8 通过 |
-| 仪器化测试（Android 13 / SQLite 3.32.2，与用户手机同版本） | 31/31 通过（`tests="31" failures="0" errors="0"`） |
-| 仪器化测试（Android 15 / SQLite 3.44.3） | 31/31 通过 |
+| 仪器化测试（Android 13 / SQLite 3.32.2，与用户手机同版本） | 35/35 通过（`tests="35" failures="0" errors="0"`） |
+| 仪器化测试（Android 15 / SQLite 3.44.3） | 35/35 通过 |
+| 设置与统计测试 `SettingsAndStatsTest` | 4/4：概览统计**真的会随操作推送新值**（订阅 flow 记录每次发射，而不是每次重查一遍）、定时清理只清够老的那条且留墓碑、保留期清理整空、设置读写往返 |
 | 同步引擎测试 `SyncEngineTest` | 8/8：远端新建（分组按名字建 / 标签关联）、时间戳优先、**打平收敛**（两台设备互相同步后内容相同）、软删与墓碑传播、本地彻底删除留墓碑并可同步出去、增量取数、主机中转记日志而从机不记、本机无该条时忽略墓碑 |
 | 同步真回环测试 `SyncLoopbackTest` | 3/3：**真 ServerSocket + 真 HttpURLConnection、两个独立库**跑双向同步（拉 4 推 1 再同步幂等）、错密钥 401 且错误原因透出、无密钥拒绝启动 |
 | 迁移测试 `MigrationTest` | 3/3：1→2（`search_history`）、2→3（`guid` 回填 32 位十六进制且互不相同、`is_purged` 默认 0、`sync_log` 可写、**拿重复 guid 插入必须被唯一索引拒绝**）、1→3 跨级路径；三步都对 schema JSON 校验 |
