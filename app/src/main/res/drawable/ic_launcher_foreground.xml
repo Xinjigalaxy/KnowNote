@@ -1,0 +1,20 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- 卡片 -->
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M37,29 L71,29 A4,4 0 0 1 75,33 L75,75 A4,4 0 0 1 71,79 L37,79 A4,4 0 0 1 33,75 L33,33 A4,4 0 0 1 37,29 Z" />
+    <!-- 三条笔记线 -->
+    <path
+        android:fillColor="#FF39C5BB"
+        android:pathData="M40,38 L68,38 L68,42 L40,42 Z" />
+    <path
+        android:fillColor="#FF39C5BB"
+        android:pathData="M40,48 L68,48 L68,52 L40,52 Z" />
+    <path
+        android:fillColor="#FF39C5BB"
+        android:pathData="M40,58 L58,58 L58,62 L40,62 Z" />
+</vector>

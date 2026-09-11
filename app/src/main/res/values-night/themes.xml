@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.KnowNote" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">#FF191C1C</item>
+    </style>
+</resources>

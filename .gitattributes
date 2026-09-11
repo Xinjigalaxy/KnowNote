@@ -1,0 +1,21 @@
+# 仓库内统一用 LF，避免 Windows/macOS 协作时整文件 diff 抖动
+* text=auto eol=lf
+
+# Windows 脚本必须 CRLF，否则 cmd 解析异常
+*.bat text eol=crlf
+*.cmd text eol=crlf
+
+# 二进制，禁止行尾转换
+*.jar binary
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.webp binary
+*.db binary
+*.apk binary
+
+# 语言统计用：避免把生成文件算进仓库语言占比
+app/schemas/** linguist-generated
+gradle/wrapper/gradle-wrapper.jar linguist-vendored
+gradlew linguist-vendored
+gradlew.bat linguist-vendored
