@@ -134,4 +134,62 @@ class NoteEditViewModelTest {
         assertEquals(1, runBlocking { db.noteDao().allOnce() }.size)
         assertEquals(listOf("新标签"), runBlocking { db.noteDao().tagNamesOf(noteId) })
     }
+
+    /**
+     * 只是「查看」了一眼就返回：不能落库。
+     *
+     * 返回时无条件保存会白白刷新 updated_at —— 列表按 updated_at 倒序，
+     * 看一眼就把笔记顶到最前面、时间显示成「刚刚」（v1.2.1 真机验证时发现）。
+     */
+    @Test
+    fun exitingWithoutChangesDoesNotTouchUpdatedAt() {
+        val noteId = runBlocking { repo.saveNote(null, "只看不改", "正文", null, listOf("标签")) }
+        val before = runBlocking { db.noteDao().byId(noteId) }!!.updatedAt
+
+        Thread.sleep(1_100) // 只要发生写库，updated_at 必然比 before 大
+        val vm = NoteEditViewModel(repo)
+        vm.load(noteId, openInPreview = true)
+        awaitLoaded(vm)
+
+        val done = CountDownLatch(1)
+        vm.saveOnExit(pendingTag = "") { done.countDown() }
+        assertTrue("返回回调超时", done.await(10, TimeUnit.SECONDS))
+
+        val after = runBlocking { db.noteDao().byId(noteId) }!!
+        assertEquals("没改动就返回，updated_at 不该被刷新", before, after.updatedAt)
+        assertEquals("只看不改", after.title)
+    }
+
+    /** 兜底保存不能被上面的改动误伤：改过字段就仍然要落库。 */
+    @Test
+    fun exitingAfterEditingStillSaves() {
+        val noteId = runBlocking { repo.saveNote(null, "原标题", "原正文", null, emptyList()) }
+
+        val vm = NoteEditViewModel(repo)
+        vm.load(noteId, openInPreview = false)
+        awaitLoaded(vm)
+        vm.setTitle("改过的标题")
+
+        val done = CountDownLatch(1)
+        vm.saveOnExit(pendingTag = "") { done.countDown() }
+        assertTrue(done.await(10, TimeUnit.SECONDS))
+
+        assertEquals("改过的标题", runBlocking { db.noteDao().byId(noteId) }!!.title)
+    }
+
+    /** 只往输入框里打了标签、没点 + 号就返回：也算改动，必须入库。 */
+    @Test
+    fun exitingWithOnlyAPendingTagStillSaves() {
+        val noteId = runBlocking { repo.saveNote(null, "标题", "正文", null, emptyList()) }
+
+        val vm = NoteEditViewModel(repo)
+        vm.load(noteId, openInPreview = false)
+        awaitLoaded(vm)
+
+        val done = CountDownLatch(1)
+        vm.saveOnExit(pendingTag = "临时标签") { done.countDown() }
+        assertTrue(done.await(10, TimeUnit.SECONDS))
+
+        assertEquals(listOf("临时标签"), runBlocking { db.noteDao().tagNamesOf(noteId) })
+    }
 }

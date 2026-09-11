@@ -113,10 +113,18 @@ class NoteEditViewModel(private val repo: NoteRepository) : ViewModel() {
         viewModelScope.launch { onSaved(persist(pendingTag)) }
     }
 
-    /** 返回时兜底保存，避免误退丢内容。 */
+    /**
+     * 返回时兜底保存，避免误退丢内容。
+     *
+     * 但**没改过任何字段**就直接退（典型场景：列表里点开看了一眼「查看」）不能落库 ——
+     * 否则会白白刷新 updated_at，把这条笔记顶到列表最前面，时间也会变成「刚刚」（v1.2.1 实测发现）。
+     */
     fun saveOnExit(pendingTag: String = "", onFinished: () -> Unit) {
         viewModelScope.launch {
-            persist(pendingTag)
+            val current = _state.value
+            if (current.dirty || pendingTag.isNotBlank()) {
+                persist(pendingTag)
+            }
             onFinished()
         }
     }
