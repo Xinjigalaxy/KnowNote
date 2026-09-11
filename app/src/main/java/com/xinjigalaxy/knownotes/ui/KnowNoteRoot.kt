@@ -28,7 +28,9 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import com.xinjigalaxy.knownotes.ui.manage.GroupNotesScreen
 import com.xinjigalaxy.knownotes.ui.manage.GroupScreen
+import com.xinjigalaxy.knownotes.ui.manage.TagNotesScreen
 import com.xinjigalaxy.knownotes.ui.manage.TagScreen
 import com.xinjigalaxy.knownotes.ui.more.ExportScreen
 import com.xinjigalaxy.knownotes.ui.more.MoreScreen
@@ -45,6 +47,13 @@ object Routes {
     const val EXPORT = "export"
     const val SYNC = "sync"
     const val TRASH = "trash"
+
+    /** 二级页面：某个分组 / 某个标签下的笔记。 */
+    const val GROUP_NOTES_PATTERN = "group/{groupId}"
+    fun groupNotes(groupId: Long): String = "group/$groupId"
+
+    const val TAG_NOTES_PATTERN = "tag/{tagId}"
+    fun tagNotes(tagId: Long): String = "tag/$tagId"
 
     /** 0 表示新建；preview 决定进来是「查看」还是「编辑」。 */
     const val EDIT_PATTERN = "edit?noteId={noteId}&preview={preview}"
@@ -113,10 +122,10 @@ fun KnowNoteRoot() {
                 )
             }
             composable(Routes.GROUPS) {
-                GroupScreen(onOpenNote = { id, preview -> navController.navigate(Routes.edit(id, preview)) })
+                GroupScreen(onOpenGroup = { navController.navigate(Routes.groupNotes(it)) })
             }
             composable(Routes.TAGS) {
-                TagScreen(onOpenNote = { id, preview -> navController.navigate(Routes.edit(id, preview)) })
+                TagScreen(onOpenTag = { navController.navigate(Routes.tagNotes(it)) })
             }
             composable(Routes.MORE) {
                 MoreScreen(
@@ -149,6 +158,27 @@ fun KnowNoteRoot() {
             composable(Routes.EXPORT) { ExportScreen(onBack = { navController.popBackStack() }) }
             composable(Routes.SYNC) { SyncScreen(onBack = { navController.popBackStack() }) }
             composable(Routes.TRASH) { TrashScreen(onBack = { navController.popBackStack() }) }
+
+            composable(
+                route = Routes.GROUP_NOTES_PATTERN,
+                arguments = listOf(navArgument("groupId") { type = NavType.LongType }),
+            ) { entry ->
+                GroupNotesScreen(
+                    groupId = entry.arguments?.getLong("groupId") ?: 0L,
+                    onOpenNote = { id, preview -> navController.navigate(Routes.edit(id, preview)) },
+                    onBack = { navController.popBackStack() },
+                )
+            }
+            composable(
+                route = Routes.TAG_NOTES_PATTERN,
+                arguments = listOf(navArgument("tagId") { type = NavType.LongType }),
+            ) { entry ->
+                TagNotesScreen(
+                    tagId = entry.arguments?.getLong("tagId") ?: 0L,
+                    onOpenNote = { id, preview -> navController.navigate(Routes.edit(id, preview)) },
+                    onBack = { navController.popBackStack() },
+                )
+            }
         }
     }
 }

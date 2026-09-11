@@ -12,13 +12,13 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.staggeredgrid.LazyVerticalStaggeredGrid
 import androidx.compose.foundation.lazy.staggeredgrid.StaggeredGridCells
-import androidx.compose.foundation.lazy.staggeredgrid.StaggeredGridItemSpan
+import androidx.compose.foundation.lazy.staggeredgrid.items
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.outlined.ExpandLess
-import androidx.compose.material.icons.outlined.ExpandMore
 import androidx.compose.material.icons.outlined.Folder
 import androidx.compose.material.icons.outlined.MoreVert
 import androidx.compose.material3.AlertDialog
@@ -50,14 +50,12 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.xinjigalaxy.knownotes.data.model.Group
-import com.xinjigalaxy.knownotes.data.model.NoteWithTags
 import com.xinjigalaxy.knownotes.data.prefs.UiPrefs
 import com.xinjigalaxy.knownotes.data.repo.NoteRepository
 import com.xinjigalaxy.knownotes.ui.AppViewModelProvider
 import com.xinjigalaxy.knownotes.ui.NoteLayout
 import com.xinjigalaxy.knownotes.ui.components.EmptyHint
 import com.xinjigalaxy.knownotes.ui.components.LayoutToggleButton
-import com.xinjigalaxy.knownotes.ui.components.NoteCard
 import com.xinjigalaxy.knownotes.ui.toNoteLayout
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -71,10 +69,7 @@ class GroupViewModel(
     private val prefs: UiPrefs,
 ) : ViewModel() {
 
-    /** 行里直接带上组内笔记，「点击展开」就不用再查一次库。 */
-    data class Row(val group: Group, val notes: List<NoteWithTags>) {
-        val noteCount: Int get() = notes.size
-    }
+    data class Row(val group: Group, val noteCount: Int)
 
     data class UiState(
         val rows: List<Row> = emptyList(),
@@ -88,9 +83,9 @@ class GroupViewModel(
         repo.observeNotes(),
         layout,
     ) { groups, notes, currentLayout ->
-        val byGroup = notes.groupBy { it.note.groupId }
+        val counts = notes.groupingBy { it.note.groupId }.eachCount()
         UiState(
-            rows = groups.map { Row(it, byGroup[it.id].orEmpty()) },
+            rows = groups.map { Row(it, counts[it.id] ?: 0) },
             layout = currentLayout,
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000L), UiState())
@@ -109,19 +104,16 @@ class GroupViewModel(
     fun delete(id: Long, keepNotes: Boolean) = viewModelScope.launch { repo.deleteGroup(id, keepNotes) }
 }
 
+/**
+ * 分组列表页。点条目 → 打开「该分组下的笔记」二级页面（左上返回回到这里）。
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun GroupScreen(
-    onOpenNote: (Long, Boolean) -> Unit,
+    onOpenGroup: (Long) -> Unit,
     viewModel: GroupViewModel = viewModel(factory = AppViewModelProvider.Factory),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
-
-    // 展开的分组 id（仅界面状态）
-    var expanded by remember { mutableStateOf(emptySet<Long>()) }
-    fun toggleExpand(id: Long) {
-        expanded = if (id in expanded) expanded - id else expanded + id
-    }
 
     var showNewDialog by remember { mutableStateOf(false) }
     var newName by remember { mutableStateOf("") }
@@ -166,23 +158,15 @@ fun GroupScreen(
                 horizontalArrangement = Arrangement.spacedBy(10.dp),
                 verticalItemSpacing = 10.dp,
             ) {
-                state.rows.forEach { row ->
-                    item(key = "g${row.group.id}") {
-                        GroupTile(
-                            row = row,
-                            expanded = row.group.id in expanded,
-                            onToggle = { toggleExpand(row.group.id) },
-                            onRename = { renameTarget = row.group; renameValue = row.group.name },
-                            onMoveUp = { viewModel.move(row.group.id, -1) },
-                            onMoveDown = { viewModel.move(row.group.id, 1) },
-                            onDelete = { deleteTarget = row.group },
-                        )
-                    }
-                    if (row.group.id in expanded) {
-                        item(key = "gn${row.group.id}", span = StaggeredGridItemSpan.FullLine) {
-                            ExpandedNotes(row.notes, onOpenNote)
-                        }
-                    }
+                items(state.rows, key = { it.group.id }) { row ->
+                    GroupTile(
+                        row = row,
+                        onOpen = { onOpenGroup(row.group.id) },
+                        onRename = { renameTarget = row.group; renameValue = row.group.name },
+                        onMoveUp = { viewModel.move(row.group.id, -1) },
+                        onMoveDown = { viewModel.move(row.group.id, 1) },
+                        onDelete = { deleteTarget = row.group },
+                    )
                 }
             }
         } else {
@@ -193,23 +177,15 @@ fun GroupScreen(
                 contentPadding = PaddingValues(16.dp, 8.dp, 16.dp, 96.dp),
                 verticalArrangement = Arrangement.spacedBy(10.dp),
             ) {
-                state.rows.forEach { row ->
-                    item(key = "g${row.group.id}") {
-                        GroupRowCard(
-                            row = row,
-                            expanded = row.group.id in expanded,
-                            onToggle = { toggleExpand(row.group.id) },
-                            onRename = { renameTarget = row.group; renameValue = row.group.name },
-                            onMoveUp = { viewModel.move(row.group.id, -1) },
-                            onMoveDown = { viewModel.move(row.group.id, 1) },
-                            onDelete = { deleteTarget = row.group },
-                        )
-                    }
-                    if (row.group.id in expanded) {
-                        item(key = "gn${row.group.id}") {
-                            ExpandedNotes(row.notes, onOpenNote)
-                        }
-                    }
+                items(state.rows, key = { it.group.id }) { row ->
+                    GroupRowCard(
+                        row = row,
+                        onOpen = { onOpenGroup(row.group.id) },
+                        onRename = { renameTarget = row.group; renameValue = row.group.name },
+                        onMoveUp = { viewModel.move(row.group.id, -1) },
+                        onMoveDown = { viewModel.move(row.group.id, 1) },
+                        onDelete = { deleteTarget = row.group },
+                    )
                 }
             }
         }
@@ -280,39 +256,6 @@ fun GroupScreen(
     }
 }
 
-/** 展开后的组内笔记：直接复用笔记页的卡片与交互（点击查看 / 长按编辑）。 */
-@Composable
-private fun ExpandedNotes(
-    notes: List<NoteWithTags>,
-    onOpenNote: (Long, Boolean) -> Unit,
-) {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(start = 12.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        if (notes.isEmpty()) {
-            Text(
-                text = "这个分组下还没有笔记，长按笔记可在编辑页里选分组",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.outline,
-                modifier = Modifier.padding(vertical = 4.dp),
-            )
-            return
-        }
-        notes.forEach { item ->
-            NoteCard(
-                item = item,
-                terms = emptyList(),
-                groupName = null,
-                onClick = { onOpenNote(item.note.id, true) },
-                onLongClick = { onOpenNote(item.note.id, false) },
-            )
-        }
-    }
-}
-
 @Composable
 private fun GroupMenu(
     expanded: Boolean,
@@ -333,8 +276,7 @@ private fun GroupMenu(
 @Composable
 private fun GroupRowCard(
     row: GroupViewModel.Row,
-    expanded: Boolean,
-    onToggle: () -> Unit,
+    onOpen: () -> Unit,
     onRename: () -> Unit,
     onMoveUp: () -> Unit,
     onMoveDown: () -> Unit,
@@ -344,22 +286,16 @@ private fun GroupRowCard(
 
     Card(
         modifier = Modifier.fillMaxWidth(),
-        onClick = onToggle,
+        onClick = onOpen,
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(start = 16.dp, end = 8.dp, top = 8.dp, bottom = 8.dp),
+                .padding(start = 16.dp, end = 4.dp, top = 8.dp, bottom = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Icon(
-                imageVector = if (expanded) Icons.Outlined.ExpandLess else Icons.Outlined.ExpandMore,
-                contentDescription = if (expanded) "收起" else "展开",
-                tint = MaterialTheme.colorScheme.primary,
-            )
-            Spacer(Modifier.width(8.dp))
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = row.group.name,
@@ -367,7 +303,7 @@ private fun GroupRowCard(
                     fontWeight = FontWeight.Medium,
                 )
                 Text(
-                    text = "${row.noteCount} 条笔记 · 点条目展开查看",
+                    text = "${row.noteCount} 条笔记",
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -385,6 +321,11 @@ private fun GroupRowCard(
                     onDelete = onDelete,
                 )
             }
+            Icon(
+                imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                contentDescription = "打开",
+                tint = MaterialTheme.colorScheme.outline,
+            )
         }
     }
 }
@@ -392,8 +333,7 @@ private fun GroupRowCard(
 @Composable
 private fun GroupTile(
     row: GroupViewModel.Row,
-    expanded: Boolean,
-    onToggle: () -> Unit,
+    onOpen: () -> Unit,
     onRename: () -> Unit,
     onMoveUp: () -> Unit,
     onMoveDown: () -> Unit,
@@ -403,7 +343,7 @@ private fun GroupTile(
 
     Card(
         modifier = Modifier.fillMaxWidth(),
-        onClick = onToggle,
+        onClick = onOpen,
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
     ) {
@@ -442,17 +382,16 @@ private fun GroupTile(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = "查看笔记",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.primary,
+                )
                 Icon(
-                    imageVector = if (expanded) Icons.Outlined.ExpandLess else Icons.Outlined.ExpandMore,
+                    imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
                     contentDescription = null,
                     tint = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.width(18.dp),
-                )
-                Spacer(Modifier.width(4.dp))
-                Text(
-                    text = if (expanded) "收起" else "展开",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.primary,
                 )
             }
         }

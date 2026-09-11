@@ -5,7 +5,6 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -13,15 +12,15 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.staggeredgrid.LazyVerticalStaggeredGrid
 import androidx.compose.foundation.lazy.staggeredgrid.StaggeredGridCells
-import androidx.compose.foundation.lazy.staggeredgrid.StaggeredGridItemSpan
+import androidx.compose.foundation.lazy.staggeredgrid.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.outlined.ExpandLess
-import androidx.compose.material.icons.outlined.ExpandMore
 import androidx.compose.material.icons.outlined.MoreVert
 import androidx.compose.material.icons.outlined.Sell
 import androidx.compose.material3.AlertDialog
@@ -53,7 +52,6 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.xinjigalaxy.knownotes.data.model.NoteWithTags
 import com.xinjigalaxy.knownotes.data.model.Tag
 import com.xinjigalaxy.knownotes.data.prefs.UiPrefs
 import com.xinjigalaxy.knownotes.data.repo.NoteRepository
@@ -61,7 +59,6 @@ import com.xinjigalaxy.knownotes.ui.AppViewModelProvider
 import com.xinjigalaxy.knownotes.ui.NoteLayout
 import com.xinjigalaxy.knownotes.ui.components.EmptyHint
 import com.xinjigalaxy.knownotes.ui.components.LayoutToggleButton
-import com.xinjigalaxy.knownotes.ui.components.NoteCard
 import com.xinjigalaxy.knownotes.ui.toNoteLayout
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -75,9 +72,7 @@ class TagViewModel(
     private val prefs: UiPrefs,
 ) : ViewModel() {
 
-    data class Row(val tag: Tag, val notes: List<NoteWithTags>) {
-        val noteCount: Int get() = notes.size
-    }
+    data class Row(val tag: Tag, val noteCount: Int)
 
     data class UiState(
         val rows: List<Row> = emptyList(),
@@ -91,8 +86,11 @@ class TagViewModel(
         repo.observeNotes(),
         layout,
     ) { tags, notes, currentLayout ->
+        val counts = buildMap<Long, Int> {
+            notes.forEach { item -> item.tags.forEach { tag -> put(tag.id, (this[tag.id] ?: 0) + 1) } }
+        }
         UiState(
-            rows = tags.map { tag -> Row(tag, notes.filter { nw -> nw.tags.any { it.id == tag.id } }) },
+            rows = tags.map { Row(it, counts[it.id] ?: 0) },
             layout = currentLayout,
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000L), UiState())
@@ -111,18 +109,16 @@ class TagViewModel(
     fun delete(id: Long) = viewModelScope.launch { repo.deleteTag(id) }
 }
 
+/**
+ * 标签列表页。点条目 → 打开「该标签下的笔记」二级页面（左上返回回到这里）。
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TagScreen(
-    onOpenNote: (Long, Boolean) -> Unit,
+    onOpenTag: (Long) -> Unit,
     viewModel: TagViewModel = viewModel(factory = AppViewModelProvider.Factory),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
-
-    var expanded by remember { mutableStateOf(emptySet<Long>()) }
-    fun toggleExpand(id: Long) {
-        expanded = if (id in expanded) expanded - id else expanded + id
-    }
 
     var showNewDialog by remember { mutableStateOf(false) }
     var newName by remember { mutableStateOf("") }
@@ -168,22 +164,14 @@ fun TagScreen(
                 horizontalArrangement = Arrangement.spacedBy(10.dp),
                 verticalItemSpacing = 10.dp,
             ) {
-                state.rows.forEach { row ->
-                    item(key = "t${row.tag.id}") {
-                        TagTile(
-                            row = row,
-                            expanded = row.tag.id in expanded,
-                            onToggle = { toggleExpand(row.tag.id) },
-                            onRename = { renameTarget = row.tag; renameValue = row.tag.name },
-                            onMerge = { mergeSource = row.tag },
-                            onDelete = { deleteTarget = row.tag },
-                        )
-                    }
-                    if (row.tag.id in expanded) {
-                        item(key = "tn${row.tag.id}", span = StaggeredGridItemSpan.FullLine) {
-                            ExpandedNotes(row.notes, onOpenNote)
-                        }
-                    }
+                items(state.rows, key = { it.tag.id }) { row ->
+                    TagTile(
+                        row = row,
+                        onOpen = { onOpenTag(row.tag.id) },
+                        onRename = { renameTarget = row.tag; renameValue = row.tag.name },
+                        onMerge = { mergeSource = row.tag },
+                        onDelete = { deleteTarget = row.tag },
+                    )
                 }
             }
         } else {
@@ -194,22 +182,14 @@ fun TagScreen(
                 contentPadding = PaddingValues(16.dp, 8.dp, 16.dp, 96.dp),
                 verticalArrangement = Arrangement.spacedBy(10.dp),
             ) {
-                state.rows.forEach { row ->
-                    item(key = "t${row.tag.id}") {
-                        TagRowCard(
-                            row = row,
-                            expanded = row.tag.id in expanded,
-                            onToggle = { toggleExpand(row.tag.id) },
-                            onRename = { renameTarget = row.tag; renameValue = row.tag.name },
-                            onMerge = { mergeSource = row.tag },
-                            onDelete = { deleteTarget = row.tag },
-                        )
-                    }
-                    if (row.tag.id in expanded) {
-                        item(key = "tn${row.tag.id}") {
-                            ExpandedNotes(row.notes, onOpenNote)
-                        }
-                    }
+                items(state.rows, key = { it.tag.id }) { row ->
+                    TagRowCard(
+                        row = row,
+                        onOpen = { onOpenTag(row.tag.id) },
+                        onRename = { renameTarget = row.tag; renameValue = row.tag.name },
+                        onMerge = { mergeSource = row.tag },
+                        onDelete = { deleteTarget = row.tag },
+                    )
                 }
             }
         }
@@ -297,7 +277,7 @@ fun TagScreen(
         AlertDialog(
             onDismissRequest = { deleteTarget = null },
             title = { Text("删除标签「${target.name}」") },
-            text = { Text("只会解除标签与本条目的关联，不会删除笔记本身。") },
+            text = { Text("只会解除标签与笔记的关联，不会删除笔记本身。") },
             confirmButton = {
                 TextButton(onClick = {
                     viewModel.delete(target.id)
@@ -306,39 +286,6 @@ fun TagScreen(
             },
             dismissButton = { TextButton(onClick = { deleteTarget = null }) { Text("取消") } },
         )
-    }
-}
-
-/** 展开后的带该标签的笔记：复用笔记页卡片（点击查看 / 长按编辑）。 */
-@Composable
-private fun ExpandedNotes(
-    notes: List<NoteWithTags>,
-    onOpenNote: (Long, Boolean) -> Unit,
-) {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(start = 12.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        if (notes.isEmpty()) {
-            Text(
-                text = "还没有笔记用到这个标签",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.outline,
-                modifier = Modifier.padding(vertical = 4.dp),
-            )
-            return
-        }
-        notes.forEach { item ->
-            NoteCard(
-                item = item,
-                terms = emptyList(),
-                groupName = null,
-                onClick = { onOpenNote(item.note.id, true) },
-                onLongClick = { onOpenNote(item.note.id, false) },
-            )
-        }
     }
 }
 
@@ -360,8 +307,7 @@ private fun TagMenu(
 @Composable
 private fun TagRowCard(
     row: TagViewModel.Row,
-    expanded: Boolean,
-    onToggle: () -> Unit,
+    onOpen: () -> Unit,
     onRename: () -> Unit,
     onMerge: () -> Unit,
     onDelete: () -> Unit,
@@ -370,22 +316,16 @@ private fun TagRowCard(
 
     Card(
         modifier = Modifier.fillMaxWidth(),
-        onClick = onToggle,
+        onClick = onOpen,
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(start = 16.dp, end = 8.dp, top = 8.dp, bottom = 8.dp),
+                .padding(start = 16.dp, end = 4.dp, top = 8.dp, bottom = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Icon(
-                imageVector = if (expanded) Icons.Outlined.ExpandLess else Icons.Outlined.ExpandMore,
-                contentDescription = if (expanded) "收起" else "展开",
-                tint = MaterialTheme.colorScheme.primary,
-            )
-            Spacer(Modifier.width(8.dp))
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = "#${row.tag.name}",
@@ -393,7 +333,7 @@ private fun TagRowCard(
                     fontWeight = FontWeight.Medium,
                 )
                 Text(
-                    text = "${row.noteCount} 条笔记 · 点条目展开查看",
+                    text = "${row.noteCount} 条笔记",
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -410,6 +350,11 @@ private fun TagRowCard(
                     onDelete = onDelete,
                 )
             }
+            Icon(
+                imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                contentDescription = "打开",
+                tint = MaterialTheme.colorScheme.outline,
+            )
         }
     }
 }
@@ -417,8 +362,7 @@ private fun TagRowCard(
 @Composable
 private fun TagTile(
     row: TagViewModel.Row,
-    expanded: Boolean,
-    onToggle: () -> Unit,
+    onOpen: () -> Unit,
     onRename: () -> Unit,
     onMerge: () -> Unit,
     onDelete: () -> Unit,
@@ -427,7 +371,7 @@ private fun TagTile(
 
     Card(
         modifier = Modifier.fillMaxWidth(),
-        onClick = onToggle,
+        onClick = onOpen,
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
     ) {
@@ -467,17 +411,16 @@ private fun TagTile(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = "查看笔记",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.primary,
+                )
                 Icon(
-                    imageVector = if (expanded) Icons.Outlined.ExpandLess else Icons.Outlined.ExpandMore,
+                    imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
                     contentDescription = null,
                     tint = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.width(18.dp),
-                )
-                Spacer(Modifier.width(4.dp))
-                Text(
-                    text = if (expanded) "收起" else "展开",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.primary,
                 )
             }
         }

@@ -5,7 +5,9 @@ import androidx.lifecycle.viewmodel.CreationExtras
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import com.xinjigalaxy.knownotes.KnowNoteApp
+import com.xinjigalaxy.knownotes.ui.manage.GroupNotesViewModel
 import com.xinjigalaxy.knownotes.ui.manage.GroupViewModel
+import com.xinjigalaxy.knownotes.ui.manage.TagNotesViewModel
 import com.xinjigalaxy.knownotes.ui.manage.TagViewModel
 import com.xinjigalaxy.knownotes.ui.more.ExportViewModel
 import com.xinjigalaxy.knownotes.ui.more.MoreViewModel
@@ -20,6 +22,8 @@ object AppViewModelProvider {
         initializer { NoteEditViewModel(app().container.repository) }
         initializer { GroupViewModel(app().container.repository, app().container.uiPrefs) }
         initializer { TagViewModel(app().container.repository, app().container.uiPrefs) }
+        initializer { GroupNotesViewModel(app().container.repository, app().container.uiPrefs) }
+        initializer { TagNotesViewModel(app().container.repository, app().container.uiPrefs) }
         initializer { TrashViewModel(app().container.repository) }
         initializer { ExportViewModel(app().container.repository, app().container.exporter) }
         initializer { MoreViewModel(app().container.repository) }
