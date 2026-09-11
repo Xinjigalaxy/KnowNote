@@ -112,8 +112,12 @@ fun KnowNoteRoot() {
                     onCreateNote = { navController.navigate(Routes.edit(null, false)) },
                 )
             }
-            composable(Routes.GROUPS) { GroupScreen() }
-            composable(Routes.TAGS) { TagScreen() }
+            composable(Routes.GROUPS) {
+                GroupScreen(onOpenNote = { id, preview -> navController.navigate(Routes.edit(id, preview)) })
+            }
+            composable(Routes.TAGS) {
+                TagScreen(onOpenNote = { id, preview -> navController.navigate(Routes.edit(id, preview)) })
+            }
             composable(Routes.MORE) {
                 MoreScreen(
                     onOpenExport = { navController.navigate(Routes.EXPORT) },

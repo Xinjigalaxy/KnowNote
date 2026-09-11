@@ -74,8 +74,12 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.xinjigalaxy.knownotes.data.model.NoteWithTags
 import com.xinjigalaxy.knownotes.ui.AppViewModelProvider
+import com.xinjigalaxy.knownotes.ui.NoteLayout
 import com.xinjigalaxy.knownotes.ui.components.EmptyHint
 import com.xinjigalaxy.knownotes.ui.components.HighlightedText
+import com.xinjigalaxy.knownotes.ui.components.LayoutToggleButton
+import com.xinjigalaxy.knownotes.ui.components.NoteCard
+import com.xinjigalaxy.knownotes.ui.components.StaggeredNoteCard
 import com.xinjigalaxy.knownotes.ui.components.formatTime
 import kotlinx.coroutines.launch
 
@@ -98,20 +102,7 @@ fun NoteListScreen(
                     title = { Text("知识点") },
                     actions = {
                         // 列表 ↔ 瀑布流 循环切换
-                        IconButton(onClick = viewModel::toggleLayout) {
-                            Icon(
-                                imageVector = if (state.layout == NoteLayout.STAGGERED) {
-                                    Icons.Outlined.ViewAgenda
-                                } else {
-                                    Icons.Outlined.GridView
-                                },
-                                contentDescription = if (state.layout == NoteLayout.STAGGERED) {
-                                    "切换为列表视图"
-                                } else {
-                                    "切换为瀑布流视图"
-                                },
-                            )
-                        }
+                        LayoutToggleButton(layout = state.layout, onToggle = viewModel::toggleLayout)
                         Box {
                             IconButton(onClick = { groupMenuOpen = true }) {
                                 Icon(Icons.Outlined.FilterAlt, contentDescription = "按分组筛选")
@@ -392,84 +383,6 @@ private fun StatusLine(
         Spacer(Modifier.weight(1f))
         if (filtered) {
             TextButton(onClick = onClear) { Text("清空筛选") }
-        }
-    }
-}
-
-@OptIn(ExperimentalFoundationApi::class)
-@Composable
-private fun NoteCard(
-    item: NoteWithTags,
-    terms: List<String>,
-    groupName: String?,
-    onClick: () -> Unit,
-    onLongClick: () -> Unit,
-) {
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .combinedClickable(onClick = onClick, onLongClick = onLongClick),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
-        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
-    ) {
-        Column(
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
-            verticalArrangement = Arrangement.spacedBy(6.dp),
-        ) {
-            HighlightedText(
-                text = item.note.title.ifBlank { "未命名笔记" },
-                terms = terms,
-                style = MaterialTheme.typography.titleMedium,
-                maxLines = 1,
-            )
-            if (item.note.content.isNotBlank()) {
-                HighlightedText(
-                    text = item.note.content,
-                    terms = terms,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.tertiary,
-                    maxLines = 3,
-                )
-            }
-            if (item.tags.isNotEmpty() || groupName != null) {
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    groupName?.let {
-                        Text(
-                            text = "▸ $it",
-                            style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.primary,
-                            fontWeight = FontWeight.Medium,
-                        )
-                    }
-                    item.tags.take(4).forEach { tag ->
-                        AssistChip(
-                            onClick = { },
-                            label = { Text("#${tag.name}", style = MaterialTheme.typography.labelSmall) },
-                            colors = AssistChipDefaults.assistChipColors(
-                                labelColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                            ),
-                        )
-                    }
-                    if (item.tags.size > 4) {
-                        Text(
-                            text = "+${item.tags.size - 4}",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.outline,
-                        )
-                    }
-                }
-            }
-            Text(
-                text = formatTime(item.note.updatedAt),
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.outline,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-            Spacer(Modifier.height(0.dp))
         }
     }
 }
