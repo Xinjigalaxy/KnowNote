@@ -59,10 +59,12 @@ import com.xinjigalaxy.knownotes.ui.markdown.MarkdownText
 @Composable
 fun NoteEditScreen(
     noteId: Long?,
+    /** true = 以「查看」模式打开（列表里点击进入），false = 直接编辑（长按进入） */
+    openInPreview: Boolean,
     onDone: () -> Unit,
     viewModel: NoteEditViewModel = viewModel(factory = AppViewModelProvider.Factory),
 ) {
-    LaunchedEffect(noteId) { viewModel.load(noteId) }
+    LaunchedEffect(noteId) { viewModel.load(noteId, openInPreview) }
 
     val state by viewModel.state.collectAsStateWithLifecycle()
     val existingTags by viewModel.allTags.collectAsStateWithLifecycle()
@@ -73,14 +75,14 @@ fun NoteEditScreen(
     var showNewGroup by remember { mutableStateOf(false) }
     var confirmDelete by remember { mutableStateOf(false) }
 
-    // 返回键 = 保存后退出，避免误退丢内容
-    BackHandler(enabled = true) { viewModel.saveOnExit(onDone) }
+    // 返回键 = 保存后退出，避免误退丢内容（输入框里没点确认的标签也一起带上）
+    BackHandler(enabled = true) { viewModel.saveOnExit(tagInput, onDone) }
 
     Scaffold(
         topBar = {
             TopAppBar(
                 navigationIcon = {
-                    IconButton(onClick = { viewModel.saveOnExit(onDone) }) {
+                    IconButton(onClick = { viewModel.saveOnExit(tagInput, onDone) }) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
                     }
                 },
@@ -97,7 +99,7 @@ fun NoteEditScreen(
                             Icon(Icons.Outlined.DeleteOutline, contentDescription = "删除")
                         }
                     }
-                    TextButton(onClick = { viewModel.save { onDone() } }) { Text("保存") }
+                    TextButton(onClick = { viewModel.save(tagInput) { onDone() } }) { Text("保存") }
                 },
             )
         },
@@ -190,6 +192,18 @@ fun NoteEditScreen(
                         selected = name in state.tags,
                         onClick = { viewModel.toggleTag(name) },
                         label = { Text(name) },
+                    )
+                }
+                // 输入框里还没点确认的标签，直接摆成一个可点的 chip，
+                // 让"打一半就去点保存"也能把标签存下来（v1.1.0 的实际 bug）
+                val pending = tagInput.trim()
+                if (pending.isNotEmpty() && pending !in names) {
+                    AssistChip(
+                        onClick = {
+                            viewModel.addTag(pending)
+                            tagInput = ""
+                        },
+                        label = { Text("＋ 新建「$pending」") },
                     )
                 }
             }

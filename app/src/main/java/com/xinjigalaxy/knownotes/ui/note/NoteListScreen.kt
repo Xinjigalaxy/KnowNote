@@ -21,14 +21,19 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.staggeredgrid.LazyVerticalStaggeredGrid
+import androidx.compose.foundation.lazy.staggeredgrid.StaggeredGridCells
+import androidx.compose.foundation.lazy.staggeredgrid.items as staggeredItems
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.FilterAlt
+import androidx.compose.material.icons.outlined.GridView
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.StickyNote2
+import androidx.compose.material.icons.outlined.ViewAgenda
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.AssistChipDefaults
@@ -74,17 +79,15 @@ import com.xinjigalaxy.knownotes.ui.components.HighlightedText
 import com.xinjigalaxy.knownotes.ui.components.formatTime
 import kotlinx.coroutines.launch
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 fun NoteListScreen(
-    onOpenNote: (Long) -> Unit,
+    /** @param 第二参数 preview：true = 查看（预览渲染），false = 直接编辑 */
+    onOpenNote: (Long, Boolean) -> Unit,
     onCreateNote: () -> Unit,
     viewModel: NoteListViewModel = viewModel(factory = AppViewModelProvider.Factory),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
-    val snackbarHostState = remember { SnackbarHostState() }
-    val scope = rememberCoroutineScope()
-    var pendingNote by remember { mutableStateOf<NoteWithTags?>(null) }
     var groupMenuOpen by remember { mutableStateOf(false) }
 
     Scaffold(
@@ -94,6 +97,21 @@ fun NoteListScreen(
                 TopAppBar(
                     title = { Text("知识点") },
                     actions = {
+                        // 列表 ↔ 瀑布流 循环切换
+                        IconButton(onClick = viewModel::toggleLayout) {
+                            Icon(
+                                imageVector = if (state.layout == NoteLayout.STAGGERED) {
+                                    Icons.Outlined.ViewAgenda
+                                } else {
+                                    Icons.Outlined.GridView
+                                },
+                                contentDescription = if (state.layout == NoteLayout.STAGGERED) {
+                                    "切换为列表视图"
+                                } else {
+                                    "切换为瀑布流视图"
+                                },
+                            )
+                        }
                         Box {
                             IconButton(onClick = { groupMenuOpen = true }) {
                                 Icon(Icons.Outlined.FilterAlt, contentDescription = "按分组筛选")
@@ -189,7 +207,6 @@ fun NoteListScreen(
                 text = { Text("记一条") },
             )
         },
-        snackbarHost = { SnackbarHost(snackbarHostState) },
     ) { innerPadding ->
         if (state.notes.isEmpty() && !state.loading) {
             EmptyHint(
@@ -200,6 +217,26 @@ fun NoteListScreen(
                     .fillMaxSize()
                     .padding(innerPadding),
             )
+        } else if (state.layout == NoteLayout.STAGGERED) {
+            LazyVerticalStaggeredGrid(
+                columns = StaggeredGridCells.Fixed(2),
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(innerPadding),
+                contentPadding = PaddingValues(start = 12.dp, end = 12.dp, top = 8.dp, bottom = 96.dp),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                verticalItemSpacing = 10.dp,
+            ) {
+                staggeredItems(state.notes, key = { it.note.id }) { item ->
+                    StaggeredNoteCard(
+                        item = item,
+                        terms = state.highlightTerms,
+                        groupName = state.groups.firstOrNull { it.id == item.note.groupId }?.name,
+                        onClick = { onOpenNote(item.note.id, true) },
+                        onLongClick = { onOpenNote(item.note.id, false) },
+                    )
+                }
+            }
         } else {
             LazyColumn(
                 modifier = Modifier
@@ -213,41 +250,74 @@ fun NoteListScreen(
                         item = item,
                         terms = state.highlightTerms,
                         groupName = state.groups.firstOrNull { it.id == item.note.groupId }?.name,
-                        onClick = { onOpenNote(item.note.id) },
-                        onLongClick = { pendingNote = item },
+                        // 点击 = 查看（预览），长按 = 编辑
+                        onClick = { onOpenNote(item.note.id, true) },
+                        onLongClick = { onOpenNote(item.note.id, false) },
                     )
                 }
             }
         }
     }
+}
 
-    pendingNote?.let { note ->
-        AlertDialog(
-            onDismissRequest = { pendingNote = null },
-            title = { Text(note.note.title.ifBlank { "未命名笔记" }) },
-            text = { Text("要对这条知识点做什么？") },
-            confirmButton = {
-                TextButton(onClick = {
-                    val id = note.note.id
-                    pendingNote = null
-                    onOpenNote(id)
-                }) { Text("编辑") }
-            },
-            dismissButton = {
-                TextButton(onClick = {
-                    val id = note.note.id
-                    pendingNote = null
-                    viewModel.deleteNote(id)
-                    scope.launch {
-                        val result = snackbarHostState.showSnackbar(
-                            message = "已删除",
-                            actionLabel = "撤销",
-                        )
-                        if (result == SnackbarResult.ActionPerformed) viewModel.restoreNote(id)
-                    }
-                }) { Text("删除") }
-            },
-        )
+/** 瀑布流卡片：紧凑、高度随内容自然变化，才形成错落效果。 */
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun StaggeredNoteCard(
+    item: NoteWithTags,
+    terms: List<String>,
+    groupName: String?,
+    onClick: () -> Unit,
+    onLongClick: () -> Unit,
+) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .combinedClickable(onClick = onClick, onLongClick = onLongClick),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
+    ) {
+        Column(
+            modifier = Modifier.padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            HighlightedText(
+                text = item.note.title.ifBlank { "未命名笔记" },
+                terms = terms,
+                style = MaterialTheme.typography.titleSmall,
+                maxLines = 3,
+            )
+            if (item.note.content.isNotBlank()) {
+                HighlightedText(
+                    text = item.note.content,
+                    terms = terms,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.tertiary,
+                    maxLines = 8,
+                )
+            }
+            groupName?.let {
+                Text(
+                    text = "▸ $it",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.primary,
+                )
+            }
+            if (item.tags.isNotEmpty()) {
+                Text(
+                    text = item.tags.joinToString(" ") { "#${it.name}" },
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+            Text(
+                text = formatTime(item.note.updatedAt),
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.outline,
+            )
+        }
     }
 }
 
