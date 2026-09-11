@@ -21,11 +21,17 @@ Kotlin + Jetpack Compose + **Material 3**，Room(SQLite) + 全文检索，MVVM +
 | 导出 | `.json` / `.csv`（带 BOM）/ `.db`（VACUUM INTO 一致性快照），SAF 保存免存储权限 |
 | 升级兼容 | `user_version` + `Migration` 机制已搭好（`AppDatabase.MIGRATIONS`，v1 暂无迁移） |
 | 同步地基 | `sync_meta`（device_id / last_sync_at）+ `change_log`（每次增删改写一条）已建表并落数据；同步页是路标页，**未实现同步** |
-| 搜索历史 / 筛选记忆 | ❌ 未做（第二阶段） |
-| Markdown 渲染 | ❌ 未做（第二阶段）——正文支持原样粘贴代码片段 |
+| Markdown 渲染 | ✅ 自研轻量渲染器：标题 / 粗体 / 斜体 / 删除线 / 行内代码 / 代码块 / 列表 / 引用 / 可点链接；编辑页「编辑 ↔ 预览」切换 |
+| 搜索结果高亮 | ✅ 命中词在标题与正文里高亮加粗 |
+| 搜索历史与筛选记忆 | ✅ 搜索历史（同词合并计数、最多 12 条、chip 展示、可单删/清空）；标签与分组筛选写入 SharedPreferences |
+| 回收站 | ✅ 软删除笔记的恢复 / 彻底删除 / 清空（文档 5.1 没列，但软删除没有入口等于变相丢数据） |
+| 列表展示形态 | ✅ 列表 ↔ 瀑布流（两列 LazyVerticalStaggeredGrid）循环切换并记忆 |
+| 数据迁移 | ✅ `user_version` 1→2 真实迁移（新增 `search_history` 表）+ `MigrationTest` 对着 schema JSON 校验 |
 
-界面页：笔记列表（常驻搜索框 + 标签 chips + 状态行）、笔记编辑、分组管理、标签管理、更多（数据库概览）、导出、同步路标页。
+界面页：笔记列表（常驻搜索框 + 标签 chips + 状态行）、笔记编辑（编辑/预览）、回收站、分组管理、标签管理、更多（数据库概览）、导出、同步路标页。
 底部导航 4 个条目：笔记 / 分组 / 标签 / 更多。
+
+交互约定：列表里**点击 = 查看**（Markdown 预览），**长按 = 编辑**；新建走右下角「记一条」。
 
 ## 二、构建与运行
 
@@ -155,13 +161,16 @@ W KnowNote: 全文检索引擎 FTS4 不可用: table notes_fts already exists ..
 | --- | --- |
 | `:app:assembleDebug` / `assembleRelease` | BUILD SUCCESSFUL |
 | 单元测试 `FtsTextTest` | 8/8 通过 |
-| 仪器化测试 `FtsSearchTest`（Android 13 / SQLite 3.32.2） | 10/10 通过 |
-| 仪器化测试 `FtsSearchTest`（Android 15 / SQLite 3.44.3） | 10/10 通过 |
+| 仪器化测试（Android 13 / SQLite 3.32.2） | 15/15 通过 |
+| 仪器化测试（Android 15 / SQLite 3.44.3） | 15/15 通过 |
+| 迁移测试 `MigrationTest` | 1→2 迁移后表结构经 schema 校验，笔记/标签关联原样保留 |
+| 编辑页测试 `NoteEditViewModelTest` | 4/4（含「输入框待确认标签必须入库」的回归） |
 | APK 元信息 | minSdk 26 / targetSdk 36 / 标签「知识点记事本」 |
-| Room schema 导出 | `app/schemas/…/1.json`，6 张表字段与需求文档 2.1 一致 |
-| 真机检索（Android 15） | 中文子串「检索」命中 2 条、前缀 `gradle*` 命中 1 条、多词元 AND 命中正确 |
+| Room schema 导出 | `app/schemas/…/1.json`、`2.json` |
+| 真机检索（LG G8 / Android 13） | 中文子串「检索」命中 2 条、前缀 `gradle*` 命中 1 条、多词元 AND 命中正确 |
 | 索引自愈 | 灌库时索引 0 条 → 启动后 8 条，与在线笔记数一致 |
 | **升级路径自愈（Android 13 / SQLite 3.32.2）** | v1.0.0 造出降级状态 → 覆盖装 v1.0.1 → 引擎恢复 FTS4，`FTS 索引条数对不上（0 → 8），已整体重建`，MATCH 查询全部命中 |
+| **真机迁移（LG G8，原有 3 条笔记）** | 覆盖装 v1.1.0 → `user_version` 1 升 2、`search_history` 建出、3 条笔记与索引全部保留 |
 
 界面截图见 `demo-shots/`。
 
@@ -170,7 +179,9 @@ W KnowNote: 全文检索引擎 FTS4 不可用: table notes_fts already exists ..
 | 版本 | 说明 |
 | --- | --- |
 | v1.0.0 | 首个可用版本（第一阶段全部功能） |
-| v1.0.1 | 修 FTS 引擎误判导致检索降级为 LIKE；新增「更多」页诊断信息（SQLite 版本 / 判定依据 / 探测结果），重复探测幂等 + 回归测试 |
+| v1.0.1 | 修 FTS 引擎误判导致检索降级为 LIKE；新增「更多」页诊断信息，重复探测幂等 + 回归测试 |
+| v1.1.0 | 第二阶段：Markdown 渲染、编辑/预览切换、搜索历史、筛选记忆、回收站；数据库 1→2 真实迁移 + 迁移测试 |
+| v1.1.1 | 修「记一条」里标签输完直接保存会丢标签；点击=查看 / 长按=编辑；列表 ↔ 瀑布流切换 |
 
 ## 六、下一步建议
 
