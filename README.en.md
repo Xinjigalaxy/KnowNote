@@ -145,8 +145,7 @@ service in this version, so the process can be reclaimed by the system.
 
 ## License
 
-No open-source licence is attached yet, so all rights are reserved by default. If you want to reuse this
-code, ask — or open an issue and we can pick a licence (MIT is the likely choice).
+[MIT](LICENSE) — use it, change it, ship it; just keep the copyright notice.
 
 ---
 
