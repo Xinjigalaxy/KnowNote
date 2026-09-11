@@ -1,6 +1,7 @@
 package com.xinjigalaxy.knownotes.data.prefs
 
 import android.content.Context
+import com.xinjigalaxy.knownotes.data.sync.SYNC_DEFAULT_PORT
 
 /**
  * 界面状态的本地记忆（需求文档 3.4「常用筛选条件记忆」）。
@@ -41,9 +42,46 @@ class UiPrefs(context: Context) {
         prefs.edit().remove(KEY_GROUP_FILTER).remove(KEY_TAG_FILTER).apply()
     }
 
+    // ---------- 局域网同步（需求文档 4） ----------
+
+    /** 共享密钥。空串表示还没设过，由同步页生成一个可读的随机串。 */
+    fun syncKey(): String = prefs.getString(KEY_SYNC_KEY, "").orEmpty()
+
+    fun saveSyncKey(value: String) {
+        prefs.edit().putString(KEY_SYNC_KEY, value).apply()
+    }
+
+    fun peerAddress(): String = prefs.getString(KEY_PEER, "").orEmpty()
+
+    fun savePeerAddress(value: String) {
+        prefs.edit().putString(KEY_PEER, value).apply()
+    }
+
+    fun hostPort(): Int = prefs.getInt(KEY_HOST_PORT, SYNC_DEFAULT_PORT)
+
+    fun saveHostPort(value: Int) {
+        prefs.edit().putInt(KEY_HOST_PORT, value).apply()
+    }
+
+    /**
+     * 是否在下次启动应用时自动恢复主机监听。
+     *
+     * 存的是「用户的选择」而不是「服务当前开着」—— 进程被杀之后不该在用户不知情时
+     * 悄悄又开始监听局域网。
+     */
+    fun hostAutoStart(): Boolean = prefs.getBoolean(KEY_HOST_AUTOSTART, false)
+
+    fun saveHostAutoStart(value: Boolean) {
+        prefs.edit().putBoolean(KEY_HOST_AUTOSTART, value).apply()
+    }
+
     private companion object {
         const val KEY_GROUP_FILTER = "filter_group"
         const val KEY_TAG_FILTER = "filter_tags"
         const val KEY_LAYOUT = "note_layout"
+        const val KEY_SYNC_KEY = "sync_key"
+        const val KEY_PEER = "sync_peer"
+        const val KEY_HOST_PORT = "sync_host_port"
+        const val KEY_HOST_AUTOSTART = "sync_host_autostart"
     }
 }

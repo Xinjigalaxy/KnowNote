@@ -11,6 +11,7 @@ import com.xinjigalaxy.knownotes.ui.manage.TagNotesViewModel
 import com.xinjigalaxy.knownotes.ui.manage.TagViewModel
 import com.xinjigalaxy.knownotes.ui.more.ExportViewModel
 import com.xinjigalaxy.knownotes.ui.more.MoreViewModel
+import com.xinjigalaxy.knownotes.ui.more.SyncViewModel
 import com.xinjigalaxy.knownotes.ui.note.NoteEditViewModel
 import com.xinjigalaxy.knownotes.ui.note.NoteListViewModel
 import com.xinjigalaxy.knownotes.ui.trash.TrashViewModel
@@ -27,6 +28,17 @@ object AppViewModelProvider {
         initializer { TrashViewModel(app().container.repository) }
         initializer { ExportViewModel(app().container.repository, app().container.exporter) }
         initializer { MoreViewModel(app().container.repository) }
+        initializer {
+            SyncViewModel(
+                repo = app().container.repository,
+                server = app().container.syncServer,
+                client = app().container.syncClient,
+                coordinator = app().container.syncCoordinator,
+                prefs = app().container.uiPrefs,
+                appScope = app().container.appScope(),
+                deviceName = app().container.deviceName,
+            )
+        }
     }
 }
 

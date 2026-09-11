@@ -8,6 +8,7 @@ import androidx.room.Query
 import androidx.room.Update
 import com.xinjigalaxy.knownotes.data.model.ChangeLogEntry
 import com.xinjigalaxy.knownotes.data.model.Group
+import com.xinjigalaxy.knownotes.data.model.SyncLogEntry
 import com.xinjigalaxy.knownotes.data.model.SyncMeta
 import com.xinjigalaxy.knownotes.data.model.Tag
 import kotlinx.coroutines.flow.Flow
@@ -66,6 +67,10 @@ interface GroupDao {
     @Query("SELECT * FROM groups WHERE id = :id")
     suspend fun byId(id: Long): Group?
 
+    /** 同步时按名字认分组（跨设备不共用 id，只共用名字）。 */
+    @Query("SELECT * FROM groups WHERE name = :name LIMIT 1")
+    suspend fun byName(name: String): Group?
+
     @Insert
     suspend fun insert(group: Group): Long
 
@@ -115,4 +120,21 @@ interface SyncMetaDao {
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun put(meta: SyncMeta)
+}
+
+/** 同步日志（同步页展示历史）。 */
+@Dao
+interface SyncLogDao {
+
+    @Insert
+    suspend fun log(entry: SyncLogEntry)
+
+    @Query("SELECT * FROM sync_log ORDER BY at DESC LIMIT :limit")
+    fun observeRecent(limit: Int = 20): Flow<List<SyncLogEntry>>
+
+    @Query("SELECT * FROM sync_log ORDER BY at DESC LIMIT :limit")
+    suspend fun recent(limit: Int): List<SyncLogEntry>
+
+    @Query("DELETE FROM sync_log")
+    suspend fun clear()
 }

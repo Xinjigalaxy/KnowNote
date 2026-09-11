@@ -15,20 +15,27 @@ import kotlinx.coroutines.flow.Flow
 interface NoteDao {
 
     @Transaction
-    @Query("SELECT * FROM notes WHERE is_deleted = 0 ORDER BY updated_at DESC")
+    @Query("SELECT * FROM notes WHERE is_deleted = 0 AND is_purged = 0 ORDER BY updated_at DESC")
     fun observeLiveWithTags(): Flow<List<NoteWithTags>>
 
-    /** 回收站：软删除的笔记（需求文档 5.1 缺的这块入口）。 */
+    /** 回收站：软删除的笔记（需求文档 5.1 缺的这块入口）。墓碑不算。 */
     @Transaction
-    @Query("SELECT * FROM notes WHERE is_deleted = 1 ORDER BY updated_at DESC")
+    @Query("SELECT * FROM notes WHERE is_deleted = 1 AND is_purged = 0 ORDER BY updated_at DESC")
     fun observeDeletedWithTags(): Flow<List<NoteWithTags>>
 
     @Transaction
-    @Query("SELECT * FROM notes ORDER BY updated_at DESC")
+    @Query("SELECT * FROM notes WHERE is_purged = 0 ORDER BY updated_at DESC")
     suspend fun allWithTagsOnce(): List<NoteWithTags>
 
-    @Query("SELECT * FROM notes ORDER BY updated_at DESC")
+    @Query("SELECT * FROM notes WHERE is_purged = 0 ORDER BY updated_at DESC")
     suspend fun allOnce(): List<Note>
+
+    @Query("SELECT * FROM notes WHERE guid = :guid LIMIT 1")
+    suspend fun byGuid(guid: String): Note?
+
+    @Transaction
+    @Query("SELECT * FROM notes WHERE guid = :guid LIMIT 1")
+    suspend fun withTagsByGuid(guid: String): NoteWithTags?
 
     @Transaction
     @Query("SELECT * FROM notes WHERE id = :id")
@@ -40,20 +47,20 @@ interface NoteDao {
     @Query("SELECT * FROM notes WHERE id IN (:ids)")
     suspend fun byIds(ids: List<Long>): List<Note>
 
-    @Query("SELECT COUNT(*) FROM notes WHERE is_deleted = 0")
+    @Query("SELECT COUNT(*) FROM notes WHERE is_deleted = 0 AND is_purged = 0")
     fun observeLiveCount(): Flow<Int>
 
     /** 分组 / 标签的引用计数，管理页展示用。 */
     @Query(
         "SELECT group_id AS groupId, COUNT(*) AS count FROM notes " +
-            "WHERE is_deleted = 0 AND group_id IS NOT NULL GROUP BY group_id"
+            "WHERE is_deleted = 0 AND is_purged = 0 AND group_id IS NOT NULL GROUP BY group_id"
     )
     fun observeGroupCounts(): Flow<List<GroupCount>>
 
     @Query("SELECT tag_id AS tagId, COUNT(*) AS count FROM note_tags GROUP BY tag_id")
     fun observeTagCounts(): Flow<List<TagCount>>
 
-    @Query("SELECT COUNT(*) FROM notes WHERE is_deleted = 1")
+    @Query("SELECT COUNT(*) FROM notes WHERE is_deleted = 1 AND is_purged = 0")
     suspend fun deletedCount(): Int
 
     @Insert
@@ -64,6 +71,13 @@ interface NoteDao {
 
     @Query("UPDATE notes SET is_deleted = 1, updated_at = :now WHERE id = :id")
     suspend fun softDelete(id: Long, now: Long)
+
+    /** 彻底删除 = 立墓碑（保留行），这样「删掉」这件事也能同步给对端。 */
+    @Query("UPDATE notes SET is_deleted = 1, is_purged = 1, updated_at = :now WHERE id = :id")
+    suspend fun purge(id: Long, now: Long)
+
+    @Query("SELECT * FROM notes WHERE is_deleted = 1 AND is_purged = 0")
+    suspend fun purgeCandidates(): List<Note>
 
     @Query("UPDATE notes SET is_deleted = 0, updated_at = :now WHERE id = :id")
     suspend fun restore(id: Long, now: Long)

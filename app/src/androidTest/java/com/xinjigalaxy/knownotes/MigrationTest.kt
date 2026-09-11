@@ -5,6 +5,7 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.xinjigalaxy.knownotes.data.db.AppDatabase
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -12,8 +13,8 @@ import org.junit.runner.RunWith
 /**
  * 迁移测试（需求文档 2.2「升级不丢数据」）。
  *
- * MigrationTestHelper 会拿 app/schemas 下导出的 1.json 建一个真 v1 库，
- * 跑迁移后**再对着 2.json 校验表结构**——所以手写的 CREATE TABLE 一旦和
+ * MigrationTestHelper 会拿 app/schemas 下导出的 schema 建库，
+ * 跑迁移后**再对着目标版本的 JSON 校验表结构**——所以手写的 CREATE TABLE 一旦和
  * Room 生成的 DDL 有偏差，这里会直接失败，不用等真机上炸。
  */
 @RunWith(AndroidJUnit4::class)
@@ -77,7 +78,121 @@ class MigrationTest {
         }
     }
 
+    /**
+     * v2 → v3：加 guid（回填 + 唯一索引）、加 is_purged、建 sync_log。
+     * 老库里的笔记必须还在，且 guid 要真的填上 —— 填不上同步就认不出同一条笔记。
+     */
+    @Test
+    fun migrate2To3BackfillsGuidAndAddsSyncLog() {
+        helper.createDatabase(TEST_DB_23, 2).use { db ->
+            db.execSQL("INSERT INTO groups(name, sort_order) VALUES('旧分组', 1)")
+            db.execSQL(
+                "INSERT INTO notes(id, title, content, group_id, created_at, updated_at, is_deleted) " +
+                    "VALUES(7, '老笔记', '正文', 1, 1000, 2000, 0)"
+            )
+            db.execSQL(
+                "INSERT INTO notes(id, title, content, created_at, updated_at, is_deleted) " +
+                    "VALUES(8, '另一条', '', 1000, 2000, 0)"
+            )
+            db.execSQL("INSERT INTO tags(name) VALUES('老标签')")
+            db.execSQL("INSERT INTO note_tags(note_id, tag_id) VALUES(7, 1)")
+            db.execSQL("INSERT INTO search_history(keyword, last_used_at, use_count) VALUES('索引', 1, 1)")
+        }
+
+        val migrated = helper.runMigrationsAndValidate(
+            TEST_DB_23,
+            3,
+            true,
+            AppDatabase.MIGRATION_2_3,
+        )
+        migrated.use { db ->
+            db.query("SELECT count(*) FROM notes").use { c ->
+                c.moveToFirst()
+                assertEquals("两条老笔记都该在", 2, c.getInt(0))
+            }
+            db.query("SELECT title, content FROM notes WHERE id = 7").use { c ->
+                c.moveToFirst()
+                assertEquals("老笔记", c.getString(0))
+                assertEquals("正文", c.getString(1))
+            }
+
+            val guids = ArrayList<String>()
+            db.query("SELECT guid FROM notes ORDER BY id").use { c ->
+                while (c.moveToNext()) guids += c.getString(0)
+            }
+            assertEquals(2, guids.size)
+            guids.forEach { guid ->
+                assertEquals("guid 应为 32 位（randomblob(16) 的十六进制）", 32, guid.length)
+                assertTrue("guid 应是纯十六进制：$guid", guid.all { it in "0123456789abcdef" })
+            }
+            assertEquals("两条笔记的 guid 必须互不相同", 2, guids.toSet().size)
+
+            db.query("SELECT is_purged FROM notes WHERE id = 7").use { c ->
+                c.moveToFirst()
+                assertEquals("老笔记默认不是墓碑", 0, c.getInt(0))
+            }
+
+            // 唯一索引真的生效：拿已有 guid 再插一条必须被拒
+            var rejected = false
+            try {
+                db.execSQL(
+                    "INSERT INTO notes(title, content, created_at, updated_at, guid) " +
+                        "VALUES('dup', '', 1, 1, (SELECT guid FROM notes WHERE id = 7))"
+                )
+            } catch (e: Exception) {
+                rejected = true
+            }
+            assertTrue("guid 唯一索引应当拒绝重复值", rejected)
+
+            db.execSQL(
+                "INSERT INTO sync_log(at, role, peer, pulled, pushed, conflicts, ok, message) " +
+                    "VALUES(1, 'host', '测试设备', 3, 2, 0, 1, '')"
+            )
+            db.query("SELECT pulled FROM sync_log").use { c ->
+                c.moveToFirst()
+                assertEquals(3, c.getInt(0))
+            }
+        }
+    }
+
+    /** v1 → v3 一次跨两级：迁移必须按顺序都跑到（需求文档 2.2）。 */
+    @Test
+    fun migrate1To3RunsBothStepsInOrder() {
+        helper.createDatabase(TEST_DB_13, 1).use { db ->
+            db.execSQL("INSERT INTO groups(name, sort_order) VALUES('很老的分组', 1)")
+            db.execSQL(
+                "INSERT INTO notes(id, title, content, group_id, created_at, updated_at, is_deleted) " +
+                    "VALUES(3, '很老的笔记', '内容', 1, 500, 600, 0)"
+            )
+        }
+
+        val migrated = helper.runMigrationsAndValidate(
+            TEST_DB_13,
+            3,
+            true,
+            AppDatabase.MIGRATION_1_2,
+            AppDatabase.MIGRATION_2_3,
+        )
+        migrated.use { db ->
+            db.query("SELECT title, guid FROM notes WHERE id = 3").use { c ->
+                c.moveToFirst()
+                assertEquals("很老的笔记", c.getString(0))
+                assertEquals("跨级迁移也要回填 guid", 32, c.getString(1).length)
+            }
+            db.query("SELECT count(*) FROM search_history").use { c ->
+                c.moveToFirst()
+                assertEquals(0, c.getInt(0))
+            }
+            db.query("SELECT count(*) FROM sync_log").use { c ->
+                c.moveToFirst()
+                assertEquals(0, c.getInt(0))
+            }
+        }
+    }
+
     private companion object {
         const val TEST_DB = "migration-test.db"
+        const val TEST_DB_23 = "migration-test-23.db"
+        const val TEST_DB_13 = "migration-test-13.db"
     }
 }

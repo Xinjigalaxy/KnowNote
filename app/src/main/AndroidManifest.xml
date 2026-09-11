@@ -1,6 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
+    <!--
+        局域网同步（第三阶段）需要联网权限。
+        usesCleartextTraffic：这一版的同步是局域网内的明文 HTTP + 共享密钥认证（需求文档 4.4），
+        Android 9 起默认禁止明文流量，不打开这个开关请求会直接被系统拦掉。
+        明文只走局域网内网，不做保密承诺 —— 密钥解决的是「谁能同步」，不是「中途看不看得见」。
+    -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+
     <application
         android:name=".KnowNoteApp"
         android:allowBackup="true"
@@ -9,6 +18,7 @@
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
         android:supportsRtl="true"
+        android:usesCleartextTraffic="true"
         android:theme="@style/Theme.KnowNote">
 
         <activity

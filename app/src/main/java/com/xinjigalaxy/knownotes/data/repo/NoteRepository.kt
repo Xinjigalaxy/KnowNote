@@ -15,9 +15,12 @@ import com.xinjigalaxy.knownotes.data.model.Note
 import com.xinjigalaxy.knownotes.data.model.NoteTagCrossRef
 import com.xinjigalaxy.knownotes.data.model.NoteWithTags
 import com.xinjigalaxy.knownotes.data.model.SearchHistory
+import com.xinjigalaxy.knownotes.data.model.SyncLogEntry
 import com.xinjigalaxy.knownotes.data.model.SyncMeta
 import com.xinjigalaxy.knownotes.data.model.Tag
+import com.xinjigalaxy.knownotes.data.sync.SyncNote
 import kotlinx.coroutines.flow.Flow
+import java.util.UUID
 
 /**
  * 单一数据入口（MVVM + Repository，需求文档 6）。
@@ -89,6 +92,7 @@ class NoteRepository(
                     groupId = groupId,
                     createdAt = now,
                     updatedAt = now,
+                    guid = newGuid(),
                 )
             )
             op = OP_INSERT
@@ -96,7 +100,14 @@ class NoteRepository(
             val existing = noteDao.byId(noteId)
             if (existing == null) {
                 id = noteDao.insert(
-                    Note(title = cleanTitle, content = content, groupId = groupId, createdAt = now, updatedAt = now)
+                    Note(
+                        title = cleanTitle,
+                        content = content,
+                        groupId = groupId,
+                        createdAt = now,
+                        updatedAt = now,
+                        guid = newGuid(),
+                    )
                 )
                 op = OP_INSERT
             } else {
@@ -142,17 +153,25 @@ class NoteRepository(
 
     fun observeDeleted(): Flow<List<NoteWithTags>> = noteDao.observeDeletedWithTags()
 
-    /** 回收站里彻底删掉单条（不可恢复）。 */
+    /**
+     * 回收站里彻底删掉单条。
+     *
+     * 注意是**立墓碑**而不是删行（v1.3.0）：行删掉的话，对端下次同步会把这条笔记又推回来。
+     * 保留 is_purged=1 的墓碑后，删除意图能靠时间戳传播出去，且所有列表都过滤掉了它。
+     */
     suspend fun purgeNote(id: Long) = db.withTransaction {
-        noteDao.hardDelete(id)
+        noteDao.purge(id, System.currentTimeMillis())
         fts.remove(id)
+        logDao.log(ChangeLogEntry(op = OP_DELETE, noteId = id, deviceId = deviceId))
     }
 
     suspend fun purgeDeleted(): Int = db.withTransaction {
-        val targets = noteDao.allOnce().filter { it.isDeleted }
+        val targets = noteDao.purgeCandidates()
+        val now = System.currentTimeMillis()
         targets.forEach {
-            noteDao.hardDelete(it.id)
+            noteDao.purge(it.id, now)
             fts.remove(it.id)
+            logDao.log(ChangeLogEntry(op = OP_DELETE, noteId = it.id, deviceId = deviceId))
         }
         targets.size
     }
@@ -260,7 +279,7 @@ class NoteRepository(
         groupDao.setOrder(b.id, a.sortOrder)
     }
 
-    // ---------- 同步元数据（第三阶段预留） ----------
+    // ---------- 同步元数据与同步取数（第三阶段） ----------
 
     suspend fun ensureDeviceMeta() {
         if (syncDao.firstOrNull() == null) {
@@ -269,6 +288,111 @@ class NoteRepository(
     }
 
     suspend fun changeLogCount(): Int = logDao.count()
+
+    suspend fun lastSyncAt(): Long = syncDao.firstOrNull()?.lastSyncAt ?: 0L
+
+    /** 同步水位线：写回时保留 peer_url，免得顺手把用户填的主机地址抹掉。 */
+    suspend fun setLastSyncAt(value: Long) {
+        val current = syncDao.firstOrNull()
+        syncDao.put(
+            SyncMeta(
+                deviceId = deviceId,
+                lastSyncAt = value,
+                peerUrl = current?.peerUrl,
+            )
+        )
+    }
+
+    suspend fun rememberPeer(peerUrl: String) {
+        val current = syncDao.firstOrNull()
+        syncDao.put(
+            SyncMeta(
+                deviceId = deviceId,
+                lastSyncAt = current?.lastSyncAt ?: 0L,
+                peerUrl = peerUrl,
+            )
+        )
+    }
+
+    suspend fun changeLogSince(since: Long): List<ChangeLogEntry> = logDao.since(since)
+
+    suspend fun noteById(id: Long): Note? = noteDao.byId(id)
+    suspend fun noteByGuid(guid: String): Note? = noteDao.byGuid(guid)
+    suspend fun tagNames(noteId: Long): List<String> = noteDao.tagNamesOf(noteId)
+    suspend fun groupNameOf(groupId: Long?): String? = groupId?.let { groupDao.byId(it)?.name }
+    suspend fun groupIdByName(name: String): Long? = groupDao.byName(name)?.id
+
+    fun observeSyncLog(limit: Int = 20) = db.syncLogDao().observeRecent(limit)
+    suspend fun logSync(entry: SyncLogEntry) = db.syncLogDao().log(entry)
+    suspend fun clearSyncLog() = db.syncLogDao().clear()
+
+    /**
+     * 把远端笔记落库（同步引擎判定完「该写」之后调用）。
+     *
+     * @param originDevice 非空表示本机是主机、正在中转从机的变更 —— 要把这条记进变更日志，
+     *        否则第二个从机拉不到「第一个从机改的内容」。传 null（本机是从机）就不记，
+     *        免得把自己的库又当作「本地新变更」推回去。
+     */
+    suspend fun writeFromRemote(payload: SyncNote, originDevice: String?): Long = db.withTransaction {
+        val existing = noteDao.byGuid(payload.guid)
+        val groupId = payload.group
+            ?.trim()
+            ?.takeIf { it.isNotEmpty() }
+            ?.let { name ->
+                groupDao.byName(name)?.id
+                    ?: groupDao.insert(Group(name = name, sortOrder = groupDao.maxOrder() + 1))
+            }
+
+        val id = if (existing == null) {
+            noteDao.insert(
+                Note(
+                    title = payload.title,
+                    content = payload.content,
+                    groupId = groupId,
+                    createdAt = payload.createdAt,
+                    updatedAt = payload.updatedAt,
+                    isDeleted = payload.isDeleted,
+                    guid = payload.guid,
+                    isPurged = payload.isPurged,
+                )
+            )
+        } else {
+            noteDao.update(
+                existing.copy(
+                    title = payload.title,
+                    content = payload.content,
+                    groupId = groupId,
+                    updatedAt = payload.updatedAt,
+                    isDeleted = payload.isDeleted,
+                    isPurged = payload.isPurged,
+                )
+            )
+            existing.id
+        }
+
+        val tagIds = resolveTagIds(payload.tags)
+        noteDao.clearTags(id)
+        if (tagIds.isNotEmpty()) {
+            noteDao.linkTags(tagIds.map { NoteTagCrossRef(noteId = id, tagId = it) })
+        }
+        reindex(id)
+
+        if (originDevice != null) {
+            logDao.log(
+                ChangeLogEntry(
+                    op = if (existing == null) OP_INSERT else OP_UPDATE,
+                    noteId = id,
+                    deviceId = originDevice,
+                    // at 用「本机收到的时间」而不是对方的 updated_at：
+                    // 否则水位线已经越过对方时间戳的从机永远拉不到这条中转变更。
+                    at = System.currentTimeMillis(),
+                )
+            )
+        }
+        id
+    }
+
+    private fun newGuid(): String = UUID.randomUUID().toString().replace("-", "")
 
     // ---------- 搜索历史与筛选记忆（需求文档 3.4） ----------
 
