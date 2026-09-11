@@ -1,20 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  自适应图标前景（方案 A：列表 + 碎片点）。
+  三条递减圆角横线（"一条条碎片"）+ 右上一点（"又记下一条"）。
+
+  配色：底色初音绿 #39C5BB，前景墨绿 #0A3436（对比约 6.4:1；白字压初音绿只有约 2:1，太糊）。
+  几何上做过两处修正：
+    · 整体下移 4 单位 —— 含圆点的重心落在 108 视口中线上，圆形遮罩下不显偏；
+    · 最长那条收到 x=66，圆点从 x=69.5 起 —— 原来那条到 76、与圆点重叠 6.5，
+      在桌面上糊成"带鼓包的横条"，现在留出 3.5 的间隙，读起来才是"线 + 点"。
+-->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp"
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
-    <!-- 卡片 -->
+    <!-- 长条 -->
     <path
-        android:fillColor="#FFFFFFFF"
-        android:pathData="M37,29 L71,29 A4,4 0 0 1 75,33 L75,75 A4,4 0 0 1 71,79 L37,79 A4,4 0 0 1 33,75 L33,33 A4,4 0 0 1 37,29 Z" />
-    <!-- 三条笔记线 -->
+        android:fillColor="#FF0A3436"
+        android:pathData="M28.75,30 H61.25 A4.75,4.75 0 0 1 61.25,39.5 H28.75 A4.75,4.75 0 0 1 28.75,30 Z" />
+    <!-- 中条 -->
     <path
-        android:fillColor="#FF39C5BB"
-        android:pathData="M40,38 L68,38 L68,42 L40,42 Z" />
+        android:fillColor="#FF0A3436"
+        android:pathData="M28.75,50 H51.25 A4.75,4.75 0 0 1 51.25,59.5 H28.75 A4.75,4.75 0 0 1 28.75,50 Z" />
+    <!-- 短条 -->
     <path
-        android:fillColor="#FF39C5BB"
-        android:pathData="M40,48 L68,48 L68,52 L40,52 Z" />
+        android:fillColor="#FF0A3436"
+        android:pathData="M28.75,70 H41.25 A4.75,4.75 0 0 1 41.25,79.5 H28.75 A4.75,4.75 0 0 1 28.75,70 Z" />
+    <!-- 碎片点 -->
     <path
-        android:fillColor="#FF39C5BB"
-        android:pathData="M40,58 L58,58 L58,62 L40,62 Z" />
+        android:fillColor="#FF0A3436"
+        android:pathData="M77,27.25 A7.5,7.5 0 1 1 77,42.25 A7.5,7.5 0 1 1 77,27.25 Z" />
 </vector>
