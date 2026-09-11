@@ -315,4 +315,4 @@ W KnowNote: 全文检索引擎 FTS4 不可用: table notes_fts already exists ..
 
 ## 八、许可
 
-暂未附开源许可协议，即默认保留所有权利。想复用这套代码的话先打声招呼 —— 或者开个 issue，我们把协议定下来（大概率选 MIT）。
+采用 [MIT 协议](LICENSE)：可自由使用、修改、分发，保留版权声明即可。
