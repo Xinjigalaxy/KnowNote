@@ -35,6 +35,7 @@ import com.xinjigalaxy.knownotes.ui.more.MoreScreen
 import com.xinjigalaxy.knownotes.ui.more.SyncScreen
 import com.xinjigalaxy.knownotes.ui.note.NoteEditScreen
 import com.xinjigalaxy.knownotes.ui.note.NoteListScreen
+import com.xinjigalaxy.knownotes.ui.trash.TrashScreen
 
 object Routes {
     const val NOTES = "notes"
@@ -43,6 +44,7 @@ object Routes {
     const val MORE = "more"
     const val EXPORT = "export"
     const val SYNC = "sync"
+    const val TRASH = "trash"
 
     /** 0 表示新建。 */
     const val EDIT_PATTERN = "edit?noteId={noteId}"
@@ -116,6 +118,7 @@ fun KnowNoteRoot() {
                 MoreScreen(
                     onOpenExport = { navController.navigate(Routes.EXPORT) },
                     onOpenSync = { navController.navigate(Routes.SYNC) },
+                    onOpenTrash = { navController.navigate(Routes.TRASH) },
                 )
             }
             composable(
@@ -135,6 +138,7 @@ fun KnowNoteRoot() {
             }
             composable(Routes.EXPORT) { ExportScreen(onBack = { navController.popBackStack() }) }
             composable(Routes.SYNC) { SyncScreen(onBack = { navController.popBackStack() }) }
+            composable(Routes.TRASH) { TrashScreen(onBack = { navController.popBackStack() }) }
         }
     }
 }

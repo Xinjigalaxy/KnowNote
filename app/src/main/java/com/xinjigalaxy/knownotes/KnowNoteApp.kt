@@ -6,6 +6,7 @@ import android.content.Context
 import android.provider.Settings
 import com.xinjigalaxy.knownotes.data.db.AppDatabase
 import com.xinjigalaxy.knownotes.data.export.Exporter
+import com.xinjigalaxy.knownotes.data.prefs.UiPrefs
 import com.xinjigalaxy.knownotes.data.repo.NoteRepository
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -34,6 +35,7 @@ class AppContainer(context: Context) {
 
     val database: AppDatabase = AppDatabase.get(appContext)
     val deviceId: String = resolveDeviceId(appContext)
+    val uiPrefs = UiPrefs(appContext)
     val repository = NoteRepository(database, deviceId)
     val exporter = Exporter(appContext, repository)
 

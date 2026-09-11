@@ -24,6 +24,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.outlined.DeleteOutline
+import androidx.compose.material.icons.outlined.Edit
+import androidx.compose.material.icons.outlined.Visibility
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -51,6 +53,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.xinjigalaxy.knownotes.ui.AppViewModelProvider
 import com.xinjigalaxy.knownotes.ui.components.formatFullTime
+import com.xinjigalaxy.knownotes.ui.markdown.MarkdownText
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
@@ -83,6 +86,12 @@ fun NoteEditScreen(
                 },
                 title = { Text(if (state.isNew) "新建知识点" else "编辑知识点") },
                 actions = {
+                    IconButton(onClick = { viewModel.setPreview(!state.preview) }) {
+                        Icon(
+                            imageVector = if (state.preview) Icons.Outlined.Edit else Icons.Outlined.Visibility,
+                            contentDescription = if (state.preview) "切到编辑" else "预览 Markdown",
+                        )
+                    }
                     if (!state.isNew) {
                         IconButton(onClick = { confirmDelete = true }) {
                             Icon(Icons.Outlined.DeleteOutline, contentDescription = "删除")
@@ -93,6 +102,17 @@ fun NoteEditScreen(
             )
         },
     ) { innerPadding ->
+        // 预览模式：渲染后的只读视图（Markdown 渲染见 MarkdownText）
+        if (state.preview) {
+            NotePreviewBody(
+                state = state,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(innerPadding),
+            )
+            return@Scaffold
+        }
+
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -237,7 +257,7 @@ fun NoteEditScreen(
         AlertDialog(
             onDismissRequest = { confirmDelete = false },
             title = { Text("删除这条知识点？") },
-            text = { Text("笔记会进入软删除状态，数据仍在库里，可随时恢复。") },
+            text = { Text("笔记会进入回收站（软删除），可随时恢复，也可以在那里彻底清除。") },
             confirmButton = {
                 TextButton(onClick = {
                     confirmDelete = false
@@ -245,6 +265,43 @@ fun NoteEditScreen(
                 }) { Text("删除") }
             },
             dismissButton = { TextButton(onClick = { confirmDelete = false }) { Text("取消") } },
+        )
+    }
+}
+
+/** 只读预览：标题 + 渲染后的正文 + 标签。 */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun NotePreviewBody(state: NoteEditViewModel.State, modifier: Modifier = Modifier) {
+    Column(
+        modifier = modifier
+            .verticalScroll(rememberScrollState())
+            .padding(horizontal = 20.dp, vertical = 16.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        if (state.title.isNotBlank()) {
+            Text(text = state.title, style = MaterialTheme.typography.headlineSmall)
+        }
+        if (state.content.isBlank()) {
+            Text(
+                text = "正文还是空的，点右上角切回编辑写点什么",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.outline,
+            )
+        } else {
+            MarkdownText(text = state.content, modifier = Modifier.fillMaxWidth())
+        }
+        if (state.tags.isNotEmpty()) {
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                state.tags.forEach { name ->
+                    AssistChip(onClick = { }, label = { Text("#$name") })
+                }
+            }
+        }
+        Text(
+            text = "预览模式 · 支持 # 标题、**粗体**、`代码`、``` 代码块、- 列表、> 引用",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.outline,
         )
     }
 }

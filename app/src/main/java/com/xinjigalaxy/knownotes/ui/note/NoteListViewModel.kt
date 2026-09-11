@@ -5,7 +5,9 @@ import androidx.lifecycle.viewModelScope
 import com.xinjigalaxy.knownotes.data.fts.FtsText
 import com.xinjigalaxy.knownotes.data.model.Group
 import com.xinjigalaxy.knownotes.data.model.NoteWithTags
+import com.xinjigalaxy.knownotes.data.model.SearchHistory
 import com.xinjigalaxy.knownotes.data.model.Tag
+import com.xinjigalaxy.knownotes.data.prefs.UiPrefs
 import com.xinjigalaxy.knownotes.data.repo.NoteRepository
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.FlowPreview
@@ -40,14 +42,22 @@ data class NoteListUiState(
     val loading: Boolean = true,
     val searchEngine: String = "",
     val searchEngineIsFullText: Boolean = true,
+    /** 搜索历史建议（需求文档 3.4）。 */
+    val searchHistory: List<SearchHistory> = emptyList(),
+    /** 搜索框聚焦且内容为空时，才把历史铺开。 */
+    val showSearchHistory: Boolean = false,
 )
 
 @OptIn(FlowPreview::class, ExperimentalCoroutinesApi::class)
-class NoteListViewModel(private val repo: NoteRepository) : ViewModel() {
+class NoteListViewModel(
+    private val repo: NoteRepository,
+    private val prefs: UiPrefs,
+) : ViewModel() {
 
     private val query = MutableStateFlow("")
-    private val selectedTagIds = MutableStateFlow<Set<Long>>(emptySet())
-    private val groupFilter = MutableStateFlow(GROUP_ALL)
+    private val selectedTagIds = MutableStateFlow(prefs.tagFilterOrNull() ?: emptySet())
+    private val groupFilter = MutableStateFlow(prefs.groupFilterOrNull() ?: GROUP_ALL)
+    private val searchFocused = MutableStateFlow(false)
 
     /** 输入即搜，防抖 300ms（需求文档 3.4）。 */
     private val debouncedQuery = query
@@ -55,7 +65,7 @@ class NoteListViewModel(private val repo: NoteRepository) : ViewModel() {
         .map { it.trim() }
         .distinctUntilChanged()
 
-    /** FTS5 命中的 id（按 bm25 相关度排序）；查询为空时为 null，表示不做检索过滤。 */
+    /** FTS5 命中的 id（按相关度排序）；查询为空时为 null，表示不做检索过滤。 */
     private val matchedIds: Flow<List<Long>?> = debouncedQuery.flatMapLatest { text ->
         if (text.isEmpty()) {
             flowOf(null)
@@ -64,15 +74,21 @@ class NoteListViewModel(private val repo: NoteRepository) : ViewModel() {
         }
     }
 
-    private val filters = combine(query, selectedTagIds, groupFilter, debouncedQuery) { q, tags, group, dq ->
-        FilterState(query = q, tagIds = tags, group = group, debounced = dq)
+    private val criteria: Flow<FilterState> = combine(
+        combine(query, selectedTagIds, groupFilter, debouncedQuery) { q, tagIds, group, debounced ->
+            FilterState(query = q, tagIds = tagIds, group = group, debounced = debounced)
+        },
+        repo.observeRecentSearches(),
+        searchFocused,
+    ) { base, history, focused ->
+        base.copy(history = history, focused = focused)
     }
 
     val uiState: StateFlow<NoteListUiState> = combine(
         repo.observeNotes(),
         repo.observeTags(),
         repo.observeGroups(),
-        filters,
+        criteria,
         matchedIds,
     ) { allNotes, tags, groups, filter, ids ->
         val ranked: List<NoteWithTags> = if (ids == null) {
@@ -104,6 +120,8 @@ class NoteListViewModel(private val repo: NoteRepository) : ViewModel() {
             loading = false,
             searchEngine = repo.searchEngineLabel,
             searchEngineIsFullText = repo.searchEngineIsFullText,
+            searchHistory = filter.history,
+            showSearchHistory = filter.focused && filter.query.isBlank() && filter.history.isNotEmpty(),
         )
     }.stateIn(
         scope = viewModelScope,
@@ -119,19 +137,46 @@ class NoteListViewModel(private val repo: NoteRepository) : ViewModel() {
         query.value = ""
     }
 
+    fun onSearchFocusChanged(focused: Boolean) {
+        searchFocused.value = focused
+    }
+
+    /** 按下输入法「搜索」键时才写历史，避免边打字边污染历史。 */
+    fun commitSearch() {
+        val keyword = query.value.trim()
+        if (keyword.isEmpty()) return
+        viewModelScope.launch { repo.recordSearch(keyword) }
+    }
+
+    fun useHistoryKeyword(keyword: String) {
+        query.value = keyword
+        viewModelScope.launch { repo.recordSearch(keyword) }
+    }
+
+    fun deleteHistoryKeyword(keyword: String) {
+        viewModelScope.launch { repo.deleteSearchKeyword(keyword) }
+    }
+
+    fun clearSearchHistory() {
+        viewModelScope.launch { repo.clearSearchHistory() }
+    }
+
     fun toggleTagFilter(tagId: Long) {
         selectedTagIds.value = selectedTagIds.value.let { current ->
             if (tagId in current) current - tagId else current + tagId
         }
+        prefs.saveTagFilter(selectedTagIds.value)
     }
 
     fun setGroupFilter(groupId: Long) {
         groupFilter.value = groupId
+        prefs.saveGroupFilter(groupId)
     }
 
     fun clearFilters() {
         selectedTagIds.value = emptySet()
         groupFilter.value = GROUP_ALL
+        prefs.clearFilters()
     }
 
     fun deleteNote(noteId: Long) {
@@ -148,5 +193,7 @@ class NoteListViewModel(private val repo: NoteRepository) : ViewModel() {
         val tagIds: Set<Long>,
         val group: Long,
         val debounced: String,
+        val history: List<SearchHistory> = emptyList(),
+        val focused: Boolean = false,
     )
 }

@@ -33,12 +33,9 @@ class MoreViewModel(private val repo: NoteRepository) : ViewModel() {
     val sqliteVersion: String = repo.sqliteVersion
     val searchEngineDecision: String = repo.searchEngineDecision
 
-    fun purgeDeleted(onDone: (Int) -> Unit) {
-        viewModelScope.launch {
-            val removed = repo.purgeDeleted()
-            refreshTick.value += 1
-            onDone(removed)
-        }
+    /** 软删除清理搬到回收站页了，这里只保留统计刷新入口。 */
+    fun refresh() {
+        refreshTick.value += 1
     }
 }
 
