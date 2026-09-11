@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.xinjigalaxy.knownotes.data.model.Group
 import com.xinjigalaxy.knownotes.data.model.Tag
+import com.xinjigalaxy.knownotes.data.prefs.UiPrefs
 import com.xinjigalaxy.knownotes.data.repo.NoteRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -13,7 +14,10 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
-class NoteEditViewModel(private val repo: NoteRepository) : ViewModel() {
+class NoteEditViewModel(
+    private val repo: NoteRepository,
+    private val prefs: UiPrefs,
+) : ViewModel() {
 
     data class State(
         val noteId: Long? = null,
@@ -26,11 +30,13 @@ class NoteEditViewModel(private val repo: NoteRepository) : ViewModel() {
         val loaded: Boolean = false,
         val dirty: Boolean = false,
         val missing: Boolean = false,
+        /** 预览模式：渲染 Markdown 而不是编辑原文（需求文档 5.2）。 */
+        val preview: Boolean = false,
     ) {
         val isNew: Boolean get() = noteId == null
     }
 
-    private val _state = MutableStateFlow(State())
+    private val _state = MutableStateFlow(State(preview = prefs.preferMarkdownPreview))
     val state: StateFlow<State> = _state.asStateFlow()
 
     val allTags: StateFlow<List<Tag>> = repo.observeTags()
@@ -43,7 +49,7 @@ class NoteEditViewModel(private val repo: NoteRepository) : ViewModel() {
         if (_state.value.loaded) return
         viewModelScope.launch {
             if (noteId == null || noteId == 0L) {
-                _state.value = State(loaded = true)
+                _state.value = State(loaded = true, preview = prefs.preferMarkdownPreview)
                 return@launch
             }
             val loaded = repo.note(noteId)
@@ -59,9 +65,16 @@ class NoteEditViewModel(private val repo: NoteRepository) : ViewModel() {
                     createdAt = loaded.note.createdAt,
                     updatedAt = loaded.note.updatedAt,
                     loaded = true,
+                    preview = prefs.preferMarkdownPreview,
                 )
             }
         }
+    }
+
+    /** 编辑 / 预览切换，并记住偏好（下次打开同样的模式）。 */
+    fun setPreview(value: Boolean) {
+        _state.update { it.copy(preview = value) }
+        prefs.preferMarkdownPreview = value
     }
 
     fun setTitle(value: String) = _state.update { it.copy(title = value, dirty = true) }

@@ -18,6 +18,11 @@ interface NoteDao {
     @Query("SELECT * FROM notes WHERE is_deleted = 0 ORDER BY updated_at DESC")
     fun observeLiveWithTags(): Flow<List<NoteWithTags>>
 
+    /** 回收站：软删除的笔记（需求文档 5.1 缺的这块入口）。 */
+    @Transaction
+    @Query("SELECT * FROM notes WHERE is_deleted = 1 ORDER BY updated_at DESC")
+    fun observeDeletedWithTags(): Flow<List<NoteWithTags>>
+
     @Transaction
     @Query("SELECT * FROM notes ORDER BY updated_at DESC")
     suspend fun allWithTagsOnce(): List<NoteWithTags>

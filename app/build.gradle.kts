@@ -9,12 +9,17 @@ android {
     namespace = "com.xinjigalaxy.knownotes"
     compileSdk = 36
 
+    // Room 的 MigrationTestHelper 需要把导出的 schema 打进测试 APK 的 assets
+    sourceSets {
+        getByName("androidTest").assets.srcDir("$projectDir/schemas")
+    }
+
     defaultConfig {
         applicationId = "com.xinjigalaxy.knownotes"
         minSdk = 26
         targetSdk = 36
-        versionCode = 2
-        versionName = "1.0.1-demo"
+        versionCode = 3
+        versionName = "1.1.0-demo"
         vectorDrawables { useSupportLibrary = true }
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -86,4 +91,6 @@ dependencies {
     androidTestImplementation(libs.androidx.test.junit)
     androidTestImplementation(libs.androidx.test.runner)
     androidTestImplementation(libs.androidx.test.core)
+    // 数据库迁移测试（MigrationTestHelper 会对着 schema JSON 校验迁移后的表结构）
+    androidTestImplementation(libs.androidx.room.testing)
 }

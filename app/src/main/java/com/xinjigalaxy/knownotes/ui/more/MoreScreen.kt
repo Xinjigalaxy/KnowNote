@@ -13,7 +13,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
-import androidx.compose.material.icons.outlined.DeleteSweep
+import androidx.compose.material.icons.outlined.DeleteOutline
 import androidx.compose.material.icons.outlined.FileDownload
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.Sync
@@ -47,12 +47,11 @@ import com.xinjigalaxy.knownotes.ui.AppViewModelProvider
 fun MoreScreen(
     onOpenExport: () -> Unit,
     onOpenSync: () -> Unit,
+    onOpenTrash: () -> Unit,
     viewModel: MoreViewModel = viewModel(factory = AppViewModelProvider.Factory),
 ) {
     val stats by viewModel.stats.collectAsStateWithLifecycle()
     var showAbout by remember { mutableStateOf(false) }
-    var showPurge by remember { mutableStateOf(false) }
-    var purgeMessage by remember { mutableStateOf<String?>(null) }
 
     Scaffold(
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
@@ -82,7 +81,7 @@ fun MoreScreen(
                         )
                         StatsRow("在线笔记", stats?.notes?.toString() ?: "—")
                         StatsRow("标签 / 分组", "${stats?.tags ?: 0} / ${stats?.groups ?: 0}")
-                        StatsRow("软删除待清理", stats?.deleted?.toString() ?: "0")
+                        StatsRow("回收站（软删除）", stats?.deleted?.toString() ?: "0")
                         StatsRow("变更日志", stats?.changeLog?.toString() ?: "0")
                         StatsRow(
                             "全文检索",
@@ -112,6 +111,19 @@ fun MoreScreen(
 
             item {
                 EntryCard(
+                    icon = Icons.Outlined.DeleteOutline,
+                    title = "回收站",
+                    subtitle = if ((stats?.deleted ?: 0) > 0) {
+                        "${stats?.deleted} 条已删除笔记，可恢复或彻底清除"
+                    } else {
+                        "长按删除的笔记会先落到这里"
+                    },
+                    onClick = onOpenTrash,
+                )
+            }
+
+            item {
+                EntryCard(
                     icon = Icons.Outlined.FileDownload,
                     title = "导出数据",
                     subtitle = "支持 .json / .csv / .db 三种格式",
@@ -130,47 +142,13 @@ fun MoreScreen(
 
             item {
                 EntryCard(
-                    icon = Icons.Outlined.DeleteSweep,
-                    title = "清理软删除笔记",
-                    subtitle = "把已删除的笔记从数据库彻底移除",
-                    onClick = { showPurge = true },
-                )
-            }
-
-            item {
-                EntryCard(
                     icon = Icons.Outlined.Info,
                     title = "关于",
-                    subtitle = "KnowNote 1.0.0-demo（Material 3）",
+                    subtitle = "KnowNote 1.1.0-demo（Material 3）",
                     onClick = { showAbout = true },
                 )
             }
-
-            purgeMessage?.let { message ->
-                item {
-                    Text(
-                        text = message,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.primary,
-                    )
-                }
-            }
         }
-    }
-
-    if (showPurge) {
-        AlertDialog(
-            onDismissRequest = { showPurge = false },
-            title = { Text("彻底清理软删除笔记？") },
-            text = { Text("当前有 ${stats?.deleted ?: 0} 条软删除笔记，清理后无法恢复。") },
-            confirmButton = {
-                TextButton(onClick = {
-                    showPurge = false
-                    viewModel.purgeDeleted { removed -> purgeMessage = "已清理 $removed 条笔记" }
-                }) { Text("清理") }
-            },
-            dismissButton = { TextButton(onClick = { showPurge = false }) { Text("取消") } },
-        )
     }
 
     if (showAbout) {
@@ -179,11 +157,13 @@ fun MoreScreen(
             title = { Text("关于 KnowNote") },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Text("安卓零碎知识点记事本 · 1.0 demo")
+                    Text("安卓零碎知识点记事本 · 1.1 demo")
                     HorizontalDivider()
                     Text("· Kotlin + Jetpack Compose + Material 3")
-                    Text("· Room(SQLite) + FTS5 全文检索")
-                    Text("· MVVM + Repository，user_version 增量迁移")
+                    Text("· Room(SQLite) + 全文检索（FTS5 优先，降级 FTS4 / LIKE）")
+                    Text("· MVVM + Repository，user_version 增量迁移 + 迁移测试")
+                    Text("· 中文按字切分做子串检索，结果高亮")
+                    Text("· Markdown 渲染、搜索历史、筛选记忆、回收站")
                     Text("· 导出 .db / .json / .csv")
                     Text("主题种子色 #39C5BB")
                 }

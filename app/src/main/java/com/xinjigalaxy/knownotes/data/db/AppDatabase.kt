@@ -10,6 +10,7 @@ import com.xinjigalaxy.knownotes.data.model.ChangeLogEntry
 import com.xinjigalaxy.knownotes.data.model.Group
 import com.xinjigalaxy.knownotes.data.model.Note
 import com.xinjigalaxy.knownotes.data.model.NoteTagCrossRef
+import com.xinjigalaxy.knownotes.data.model.SearchHistory
 import com.xinjigalaxy.knownotes.data.model.SyncMeta
 import com.xinjigalaxy.knownotes.data.model.Tag
 
@@ -21,8 +22,9 @@ import com.xinjigalaxy.knownotes.data.model.Tag
         NoteTagCrossRef::class,
         SyncMeta::class,
         ChangeLogEntry::class,
+        SearchHistory::class,
     ],
-    version = 1,
+    version = 2,
     exportSchema = true,
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -32,13 +34,14 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun groupDao(): GroupDao
     abstract fun changeLogDao(): ChangeLogDao
     abstract fun syncMetaDao(): SyncMetaDao
+    abstract fun searchHistoryDao(): SearchHistoryDao
 
     companion object {
 
         const val DB_NAME = "knownotes.db"
 
         /** 与 @Database(version = ...) 保持一致，导出时写入 JSON 便于日后迁移。 */
-        const val SCHEMA_VERSION = 1
+        const val SCHEMA_VERSION = 2
 
         @Volatile
         private var instance: AppDatabase? = null
@@ -54,18 +57,34 @@ abstract class AppDatabase : RoomDatabase() {
                 .build()
 
         /**
-         * 升级兼容（需求文档 2.2）：version + 1，按顺序追加 Migration，全部走 ALTER TABLE，
-         * 不重建表。示例：
+         * v1 → v2：新增搜索历史表（需求文档 2.2「每次版本升级按顺序执行迁移」）。
+         * 只用 CREATE TABLE，不动既有表 —— 升级不重建表、不丢数据。
+         */
+        internal val MIGRATION_1_2 = object : Migration(1, 2) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `search_history` (" +
+                        "`keyword` TEXT NOT NULL, " +
+                        "`last_used_at` INTEGER NOT NULL, " +
+                        "`use_count` INTEGER NOT NULL, " +
+                        "PRIMARY KEY(`keyword`))"
+                )
+            }
+        }
+
+        /**
+         * 升级兼容（需求文档 2.2）：version + 1，按顺序追加 Migration，全部走 ALTER TABLE / CREATE TABLE，
+         * 不重建表。新增字段一律允许 NULL 或带默认值。示例：
          *
          * ```
-         * private val MIGRATION_1_2 = object : Migration(1, 2) {
+         * internal val MIGRATION_2_3 = object : Migration(2, 3) {
          *     override fun migrate(db: SupportSQLiteDatabase) {
          *         db.execSQL("ALTER TABLE notes ADD COLUMN is_pinned INTEGER NOT NULL DEFAULT 0")
          *     }
          * }
          * ```
          */
-        private val MIGRATIONS: Array<Migration> = arrayOf()
+        private val MIGRATIONS: Array<Migration> = arrayOf(MIGRATION_1_2)
     }
 }
 

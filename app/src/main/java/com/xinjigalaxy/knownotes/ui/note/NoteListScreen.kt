@@ -5,6 +5,8 @@ import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -13,10 +15,14 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.outlined.Close
@@ -36,6 +42,7 @@ import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.InputChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
@@ -53,7 +60,9 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -113,13 +122,14 @@ fun NoteListScreen(
                     },
                 )
 
-                // 常驻搜索框：输入即搜（防抖 300ms）
+                // 常驻搜索框：输入即搜（防抖 300ms）；按输入法搜索键才写历史
                 OutlinedTextField(
                     value = state.query,
                     onValueChange = viewModel::onQueryChange,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 16.dp),
+                        .padding(horizontal = 16.dp)
+                        .onFocusChanged { viewModel.onSearchFocusChanged(it.isFocused) },
                     placeholder = { Text("搜索标题 / 正文 / 标签") },
                     leadingIcon = { Icon(Icons.Outlined.Search, contentDescription = null) },
                     trailingIcon = {
@@ -131,7 +141,18 @@ fun NoteListScreen(
                     },
                     singleLine = true,
                     shape = MaterialTheme.shapes.extraLarge,
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                    keyboardActions = KeyboardActions(onSearch = { viewModel.commitSearch() }),
                 )
+
+                if (state.showSearchHistory) {
+                    SearchHistoryPanel(
+                        state = state,
+                        onUse = viewModel::useHistoryKeyword,
+                        onDelete = viewModel::deleteHistoryKeyword,
+                        onClearAll = viewModel::clearSearchHistory,
+                    )
+                }
 
                 if (state.tags.isNotEmpty()) {
                     LazyRow(
@@ -226,6 +247,44 @@ fun NoteListScreen(
                     }
                 }) { Text("删除") }
             },
+        )
+    }
+}
+
+/** 搜索历史（需求文档 3.4）：点即用，X 删单条，右侧可清空。 */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun SearchHistoryPanel(
+    state: NoteListUiState,
+    onUse: (String) -> Unit,
+    onDelete: (String) -> Unit,
+    onClearAll: () -> Unit,
+) {
+    FlowRow(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(start = 16.dp, end = 16.dp, top = 4.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        state.searchHistory.forEach { entry ->
+            InputChip(
+                selected = false,
+                onClick = { onUse(entry.keyword) },
+                label = { Text(entry.keyword) },
+                trailingIcon = {
+                    Icon(
+                        imageVector = Icons.Outlined.Close,
+                        contentDescription = "删除这条历史",
+                        modifier = Modifier
+                            .size(16.dp)
+                            .clickable { onDelete(entry.keyword) },
+                    )
+                },
+            )
+        }
+        AssistChip(
+            onClick = onClearAll,
+            label = { Text("清空历史") },
         )
     }
 }

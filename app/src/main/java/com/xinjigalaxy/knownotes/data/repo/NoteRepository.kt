@@ -6,6 +6,7 @@ import com.xinjigalaxy.knownotes.data.db.AppDatabase
 import com.xinjigalaxy.knownotes.data.db.FtsEngine
 import com.xinjigalaxy.knownotes.data.db.FtsStore
 import com.xinjigalaxy.knownotes.data.db.GroupCount
+import com.xinjigalaxy.knownotes.data.db.SearchHistoryDao
 import com.xinjigalaxy.knownotes.data.db.TagCount
 import com.xinjigalaxy.knownotes.data.fts.FtsText
 import com.xinjigalaxy.knownotes.data.model.ChangeLogEntry
@@ -13,6 +14,7 @@ import com.xinjigalaxy.knownotes.data.model.Group
 import com.xinjigalaxy.knownotes.data.model.Note
 import com.xinjigalaxy.knownotes.data.model.NoteTagCrossRef
 import com.xinjigalaxy.knownotes.data.model.NoteWithTags
+import com.xinjigalaxy.knownotes.data.model.SearchHistory
 import com.xinjigalaxy.knownotes.data.model.SyncMeta
 import com.xinjigalaxy.knownotes.data.model.Tag
 import kotlinx.coroutines.flow.Flow
@@ -33,6 +35,7 @@ class NoteRepository(
     private val groupDao = db.groupDao()
     private val logDao = db.changeLogDao()
     private val syncDao = db.syncMetaDao()
+    private val historyDao = db.searchHistoryDao()
     private val fts = FtsStore(db)
 
     /** 当前实际生效的全文检索引擎（FTS5 / FTS4 / LIKE 兜底）。 */
@@ -136,6 +139,14 @@ class NoteRepository(
     }
 
     suspend fun deletedCount(): Int = noteDao.deletedCount()
+
+    fun observeDeleted(): Flow<List<NoteWithTags>> = noteDao.observeDeletedWithTags()
+
+    /** 回收站里彻底删掉单条（不可恢复）。 */
+    suspend fun purgeNote(id: Long) = db.withTransaction {
+        noteDao.hardDelete(id)
+        fts.remove(id)
+    }
 
     suspend fun purgeDeleted(): Int = db.withTransaction {
         val targets = noteDao.allOnce().filter { it.isDeleted }
@@ -258,6 +269,31 @@ class NoteRepository(
     }
 
     suspend fun changeLogCount(): Int = logDao.count()
+
+    // ---------- 搜索历史与筛选记忆（需求文档 3.4） ----------
+
+    fun observeRecentSearches(): Flow<List<SearchHistory>> = historyDao.observeRecent()
+    fun observeTopSearches(): Flow<List<SearchHistory>> = historyDao.observeTop()
+
+    /**
+     * 记一次搜索：同一个词只累加次数、刷新时间；随后只保留最近 MAX_SUGGESTIONS 条，
+     * 避免历史无限增长（剪枝在 Kotlin 里做，比在 SQL 里自引用子查询稳）。
+     */
+    suspend fun recordSearch(keyword: String) {
+        val clean = keyword.trim()
+        if (clean.isEmpty()) return
+        if (historyDao.insert(SearchHistory(keyword = clean)) == -1L) {
+            historyDao.touch(clean, System.currentTimeMillis())
+        }
+        val keep = historyDao.recentKeywords(SearchHistoryDao.MAX_SUGGESTIONS)
+        if (keep.isNotEmpty() && historyDao.count() > keep.size) {
+            historyDao.deleteExcept(keep)
+        }
+    }
+
+    suspend fun deleteSearchKeyword(keyword: String) = historyDao.delete(keyword)
+
+    suspend fun clearSearchHistory() = historyDao.clear()
 
     // ---------- 导出取数 ----------
 
