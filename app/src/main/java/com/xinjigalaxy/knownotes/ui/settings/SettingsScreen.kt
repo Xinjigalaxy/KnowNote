@@ -1,8 +1,11 @@
 package com.xinjigalaxy.knownotes.ui.settings
 
+import android.app.Activity
 import android.os.Build
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -29,16 +32,22 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.res.stringResource
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.xinjigalaxy.knownotes.R
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.xinjigalaxy.knownotes.data.settings.AppLanguage
+import com.xinjigalaxy.knownotes.data.settings.AppLocales
 import com.xinjigalaxy.knownotes.data.settings.ThemeMode
 import com.xinjigalaxy.knownotes.ui.AppViewModelProvider
 import com.xinjigalaxy.knownotes.ui.components.formatTime
+import com.xinjigalaxy.knownotes.ui.components.rendered
 
 /**
  * 设置页（v1.4.0）：外观（主题模式 + 动态取色）与回收站定时清理。
@@ -46,7 +55,7 @@ import com.xinjigalaxy.knownotes.ui.components.formatTime
  * 主题切换是即时的：设置写进 AppSettings 的 StateFlow，MainActivity 直接 collect，
  * 改一下这里整棵树就换肤，不用重建 Activity。
  */
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun SettingsScreen(
     onBack: () -> Unit,
@@ -54,6 +63,7 @@ fun SettingsScreen(
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val dynamicColorSupported = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
+    val context = LocalContext.current
 
     Scaffold(
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
@@ -61,10 +71,10 @@ fun SettingsScreen(
             TopAppBar(
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.back))
                     }
                 },
-                title = { Text("设置") },
+                title = { Text(stringResource(R.string.settings)) },
             )
         },
     ) { innerPadding ->
@@ -76,9 +86,34 @@ fun SettingsScreen(
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             item {
-                SectionCard(title = "外观") {
+                SectionCard(title = stringResource(R.string.lang_title)) {
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        AppLanguage.entries.forEach { language ->
+                            FilterChip(
+                                selected = state.language == language,
+                                onClick = {
+                                    viewModel.setLanguage(language)
+                                    // 33+ 交给系统 LocaleManager 重建；低版本得自己来
+                                    if (Build.VERSION.SDK_INT < AppLocales.PER_APP_LANGUAGE_API) {
+                                        (context as? Activity)?.recreate()
+                                    }
+                                },
+                                label = { Text(stringResource(language.labelRes)) },
+                            )
+                        }
+                    }
                     Text(
-                        text = "主题模式",
+                        text = stringResource(R.string.lang_note),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.outline,
+                    )
+                }
+            }
+
+            item {
+                SectionCard(title = stringResource(R.string.appearance)) {
+                    Text(
+                        text = stringResource(R.string.theme_mode),
                         style = MaterialTheme.typography.labelMedium,
                         color = MaterialTheme.colorScheme.outline,
                     )
@@ -87,7 +122,7 @@ fun SettingsScreen(
                             FilterChip(
                                 selected = state.themeMode == mode,
                                 onClick = { viewModel.setThemeMode(mode) },
-                                label = { Text(mode.label) },
+                                label = { Text(stringResource(mode.labelRes)) },
                             )
                         }
                     }
@@ -97,14 +132,14 @@ fun SettingsScreen(
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
-                                text = "动态取色（Android 12+）",
+                                text = stringResource(R.string.dynamic_color_android_12),
                                 style = MaterialTheme.typography.bodyLarge,
                             )
                             Text(
                                 text = if (dynamicColorSupported) {
-                                    "跟随壁纸生成主题色；关掉则用默认的初音绿 #39C5BB"
+                                    stringResource(R.string.generate_theme_colors_from_the_wallpaper_turn_of)
                                 } else {
-                                    "本机是 Android ${Build.VERSION.RELEASE}，系统不支持动态取色"
+                                    stringResource(R.string.this_device_runs_android_build_version_release_w, Build.VERSION.RELEASE)
                                 },
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.outline,
@@ -120,14 +155,14 @@ fun SettingsScreen(
             }
 
             item {
-                SectionCard(title = "回收站") {
-                    InfoRow("当前回收站", "${state.trashCount} 条")
+                SectionCard(title = stringResource(R.string.trash)) {
+                    InfoRow(stringResource(R.string.current_trash), stringResource(R.string.state_trashcount_items, state.trashCount))
 
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Column(modifier = Modifier.weight(1f)) {
-                            Text(text = "定时清理", style = MaterialTheme.typography.bodyLarge)
+                            Text(text = stringResource(R.string.scheduled_cleanup), style = MaterialTheme.typography.bodyLarge)
                             Text(
-                                text = "超过保留天数的笔记会被彻底删除（不可恢复）",
+                                text = stringResource(R.string.notes_older_than_the_retention_period_are_perman),
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.outline,
                             )
@@ -139,7 +174,7 @@ fun SettingsScreen(
                     }
 
                     Text(
-                        text = "保留天数",
+                        text = stringResource(R.string.retention_days),
                         style = MaterialTheme.typography.labelMedium,
                         color = MaterialTheme.colorScheme.outline,
                     )
@@ -149,7 +184,7 @@ fun SettingsScreen(
                                 selected = state.retentionDays == days,
                                 onClick = { viewModel.setRetentionDays(days) },
                                 enabled = state.autoPurgeTrash,
-                                label = { Text("$days 天") },
+                                label = { Text(stringResource(R.string.days_days, days)) },
                             )
                         }
                     }
@@ -159,12 +194,12 @@ fun SettingsScreen(
                             onClick = viewModel::purgeNow,
                             enabled = !state.busy && state.trashCount > 0,
                         ) {
-                            Text(if (state.busy) "清理中…" else "立即清理一次")
+                            Text(if (state.busy) stringResource(R.string.cleaning) else stringResource(R.string.clean_up_now))
                         }
                         Spacer(Modifier.width(12.dp))
                         if (state.lastPurgeAt > 0L) {
                             Text(
-                                text = "上次清理 ${formatTime(state.lastPurgeAt)}，删了 ${state.lastPurgeCount} 条",
+                                text = stringResource(R.string.last_cleanup_formattime_state_lastpurgeat_remove, formatTime(state.lastPurgeAt), state.lastPurgeCount),
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.outline,
                             )
@@ -172,8 +207,8 @@ fun SettingsScreen(
                     }
 
                     Text(
-                        text = "定时清理走 WorkManager，每天一次；应用没打开也会执行。" +
-                            "清理结果同样会同步给其他设备（走墓碑，不是偷偷删行）。",
+                        text = stringResource(R.string.scheduled_cleanup_runs_on_workmanager_once_a_day) +
+                            stringResource(R.string.cleanup_results_also_sync_to_other_devices_via_t),
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.outline,
                     )
@@ -194,14 +229,14 @@ fun SettingsScreen(
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
                             Text(
-                                text = message,
+                                text = message.rendered(),
                                 modifier = Modifier
                                     .weight(1f)
                                     .padding(vertical = 16.dp),
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = MaterialTheme.colorScheme.onSecondaryContainer,
                             )
-                            TextButton(onClick = viewModel::consumeMessage) { Text("知道了") }
+                            TextButton(onClick = viewModel::consumeMessage) { Text(stringResource(R.string.got_it)) }
                         }
                     }
                 }
@@ -209,7 +244,7 @@ fun SettingsScreen(
 
             item {
                 Text(
-                    text = "设置都保存在 SharedPreferences（knownotes_ui），不参与同步、不写进导出文件。",
+                    text = stringResource(R.string.settings_live_in_sharedpreferences_knownotes_ui_),
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.outline,
                 )

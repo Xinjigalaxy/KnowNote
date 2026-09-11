@@ -17,6 +17,7 @@
 顺带验证 FtsStore.repair() 的自愈逻辑。
 """
 
+import os
 import sqlite3
 import sys
 import time
@@ -120,15 +121,19 @@ def main(path: str) -> None:
 
     for index, (title, content, group_name, tags) in enumerate(NOTES):
         created = now - (len(NOTES) - index) * 3_600_000
+        # guid 是 v3 起的跨设备身份，带唯一索引 —— 手写数据必须自己生成，
+        # 否则多条空 guid 会被唯一索引直接拒绝（scripts 第一次跑就踩到）
+        guid = os.urandom(16).hex()
         cur.execute(
-            "INSERT INTO notes(title, content, group_id, created_at, updated_at, is_deleted) "
-            "VALUES(?, ?, ?, ?, ?, 0)",
+            "INSERT INTO notes(title, content, group_id, created_at, updated_at, is_deleted, guid, is_purged) "
+            "VALUES(?, ?, ?, ?, ?, 0, ?, 0)",
             (
                 title,
                 content,
                 group_ids[group_name] if group_name else None,
                 created,
                 created,
+                guid,
             ),
         )
         note_id = cur.lastrowid

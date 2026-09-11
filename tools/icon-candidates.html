@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<style>
+  body { font-family: var(--app-font, system-ui, "Segoe UI", "Microsoft YaHei", sans-serif); color: var(--foreground); margin: 0; }
+  .wrap { max-width: 980px; }
+  h2 { font-size: 15px; font-weight: 600; margin: 0 0 4px; }
+  .hint { font-size: 12px; color: var(--muted-foreground); margin: 0 0 14px; line-height: 1.6; }
+  .card { border: 1px solid var(--border); border-radius: 14px; padding: 14px; margin-bottom: 14px; }
+  .row { display: flex; gap: 18px; align-items: flex-start; flex-wrap: wrap; }
+  .tiles { display: flex; gap: 12px; flex-wrap: wrap; }
+  .tile { text-align: center; }
+  .tile .lbl { font-size: 10px; color: var(--muted-foreground); margin-top: 5px; letter-spacing: .2px; }
+  .shape { width: 76px; height: 76px; display: flex; align-items: center; justify-content: center; }
+  .shape svg { width: 100%; height: 100%; display: block; }
+  .squircle { border-radius: 18px; }
+  .round { border-radius: 50%; }
+  .name { font-size: 13px; font-weight: 600; margin-bottom: 6px; }
+  .meta { font-size: 11px; color: var(--muted-foreground); line-height: 1.7; }
+  .badge { display: inline-block; font-size: 10px; padding: 1px 7px; border-radius: 999px; border: 1px solid var(--border); margin-left: 6px; color: var(--muted-foreground); }
+  code { font-size: 11px; background: var(--accent); padding: 1px 4px; border-radius: 4px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h2>KnowNote / 碎片笔记 — 图标候选（7 个）</h2>
+  <p class="hint">
+    每个方案给 4 种呈现：<b>自适应图标</b>（圆形遮罩，浅色/深色壁纸下）、<b>主题图标</b>（Android 13+ 跟随系统取色，靠的是单色层 monochrome）、<b>单色剪影</b>（就是单色层的形状，只有 alpha 有效）。<br>
+    请挑一个（或说"A 的形状 + C 的圆角"这种组合也行），我再落成 Android vector drawable 并接上动态取色。
+  </p>
+
+  <!-- A -->
+  <div class="card">
+    <div class="row">
+      <div style="min-width:150px">
+        <div class="name">A · 列表 + 碎片点</div>
+        <div class="meta">三条递减的横线（碎片笔记的"条目"感）+ 右上一点表示"新记下一条"。<br>最直白、小尺寸下最不糊。</div>
+      </div>
+      <div class="tiles" id="tiles-A"></div>
+    </div>
+  </div>
+
+  <!-- B -->
+  <div class="card">
+    <div class="row">
+      <div style="min-width:150px">
+        <div class="name">B · 碎片拼合</div>
+        <div class="meta">一块大碎片 + 两块小碎片正在拼合。呼应"碎片笔记"的中文名，抽象但有辨识度。</div>
+      </div>
+      <div class="tiles" id="tiles-B"></div>
+    </div>
+  </div>
+
+  <!-- C -->
+  <div class="card">
+    <div class="row">
+      <div style="min-width:150px">
+        <div class="name">C · 折角便签</div>
+        <div class="meta">最经典的"笔记"意象：折角 + 便签。翻成单色剪影后折角依然读得出来。</div>
+      </div>
+      <div class="tiles" id="tiles-C"></div>
+    </div>
+  </div>
+
+  <!-- D -->
+  <div class="card">
+    <div class="row">
+      <div style="min-width:150px">
+        <div class="name">D · 书签</div>
+        <div class="meta">书签形（下方 V 口）。和"知识点归档"的语义贴合，形状也是所有方案里最好认的。</div>
+      </div>
+      <div class="tiles" id="tiles-D"></div>
+    </div>
+  </div>
+
+  <!-- E -->
+  <div class="card">
+    <div class="row">
+      <div style="min-width:150px">
+        <div class="name">E · 井号标签</div>
+        <div class="meta">四条圆角短棒组成 #，对应应用里的"标签"能力。几何感强，M3 味最足。</div>
+      </div>
+      <div class="tiles" id="tiles-E"></div>
+    </div>
+  </div>
+
+  <!-- F -->
+  <div class="card">
+    <div class="row">
+      <div style="min-width:150px">
+        <div class="name">F · 字母 K</div>
+        <div class="meta">KnowNote 的几何字母标。品牌识别最直接，但和"笔记"的语义关联最弱。</div>
+      </div>
+      <div class="tiles" id="tiles-F"></div>
+    </div>
+  </div>
+
+  <!-- G -->
+  <div class="card">
+    <div class="row">
+      <div style="min-width:150px">
+        <div class="name">G · 圆 + 缺角碎片</div>
+        <div class="meta">一个圆形被切掉一角、旁边补上一小块。最抽象，但也最"轻"。</div>
+      </div>
+      <div class="tiles" id="tiles-G"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+const LIGHT_BG = "#DFF3F1", DARK_BG = "#12343A";
+const FG_LIGHT = "#00696B", FG_DARK = "#7FE7E4";   // 前景：跟随背景明暗
+const THEMED = "#8AB4F8";                          // 主题图标：模拟系统取色
+
+// 每个方案只写「单色剪影」的 path/元素；下面统一套三种背景
+const CANDIDATES = {
+  A: `<g fill="currentColor">
+        <rect x="24" y="26" width="52" height="9.5" rx="4.75"></rect>
+        <rect x="24" y="46" width="38" height="9.5" rx="4.75"></rect>
+        <rect x="24" y="66" width="26" height="9.5" rx="4.75"></rect>
+        <circle cx="77" cy="30.75" r="7.5"></circle>
+      </g>`,
+  B: `<g fill="currentColor">
+        <rect x="24" y="24" width="34" height="34" rx="10"></rect>
+        <rect x="64" y="24" width="20" height="20" rx="7"></rect>
+        <rect x="64" y="50" width="20" height="20" rx="7"></rect>
+        <rect x="24" y="64" width="16" height="16" rx="6" opacity="0.55"></rect>
+      </g>`,
+  C: `<g fill="currentColor">
+        <path d="M40 24h28a12 12 0 0 1 12 12v26L62 86H40a12 12 0 0 1-12-12V36a12 12 0 0 1 12-12z"></path>
+        <path d="M66 82l16-16v16z"></path>
+      </g>`,
+  D: `<g fill="currentColor">
+        <path d="M36 24h36a10 10 0 0 1 10 10v52L54 66 26 86V34a10 10 0 0 1 10-10z"></path>
+      </g>`,
+  E: `<g fill="currentColor">
+        <rect x="34" y="24" width="9.5" height="60" rx="4.75"></rect>
+        <rect x="64.5" y="24" width="9.5" height="60" rx="4.75"></rect>
+        <rect x="24" y="38" width="60" height="9.5" rx="4.75"></rect>
+        <rect x="24" y="60.5" width="60" height="9.5" rx="4.75"></rect>
+      </g>`,
+  F: `<g fill="currentColor">
+        <rect x="28" y="24" width="11" height="60" rx="5.5"></rect>
+        <rect x="28" y="24" width="52" height="11" rx="5.5" transform="rotate(38 28 24)"></rect>
+        <rect x="28" y="84" width="52" height="11" rx="5.5" transform="rotate(-38 28 84)"></rect>
+      </g>`,
+  G: `<g fill="currentColor">
+        <path d="M54 24a30 30 0 1 1-21.2 8.8A30 30 0 0 1 54 24zm0 11a19 19 0 1 0 13.4 5.6A19 19 0 0 0 54 35z" fill-rule="evenodd"></path>
+        <rect x="64" y="60" width="20" height="20" rx="7"></rect>
+      </g>`
+};
+
+const LABELS = ["自适应 · 浅色", "自适应 · 深色", "主题图标（取色）", "单色剪影"];
+
+function svg(inner, fg) {
+  return `<svg viewBox="0 0 108 108" xmlns="http://www.w3.org/2000/svg" style="color:${fg}">${inner}</svg>`;
+}
+
+for (const [key, inner] of Object.entries(CANDIDATES)) {
+  const host = document.getElementById("tiles-" + key);
+  if (!host) continue;
+  const tiles = [
+    { bg: LIGHT_BG, fg: FG_LIGHT, cls: "squircle", lbl: LABELS[0] },
+    { bg: DARK_BG, fg: FG_DARK, cls: "squircle", lbl: LABELS[1] },
+    { bg: "#1F1F22", fg: THEMED, cls: "round", lbl: LABELS[2] },
+    { bg: "transparent", fg: "#8E8E93", cls: "", lbl: LABELS[3] },
+  ];
+  host.innerHTML = tiles.map(t => `
+    <div class="tile">
+      <div class="shape ${t.cls}" style="background:${t.bg};${t.bg === "transparent" ? "border:1px dashed var(--border)" : ""}">${svg(inner, t.fg)}</div>
+      <div class="lbl">${t.lbl}</div>
+    </div>`).join("");
+}
+</script>
+</body>
+</html>

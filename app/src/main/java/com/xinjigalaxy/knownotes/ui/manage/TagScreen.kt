@@ -39,6 +39,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.res.stringResource
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -48,6 +49,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.xinjigalaxy.knownotes.R
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
@@ -131,7 +133,7 @@ fun TagScreen(
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
         topBar = {
             TopAppBar(
-                title = { Text("标签") },
+                title = { Text(stringResource(R.string.tags)) },
                 actions = {
                     LayoutToggleButton(layout = state.layout, onToggle = viewModel::toggleLayout)
                 },
@@ -141,15 +143,15 @@ fun TagScreen(
             ExtendedFloatingActionButton(
                 onClick = { newName = ""; showNewDialog = true },
                 icon = { Icon(Icons.Filled.Add, contentDescription = null) },
-                text = { Text("新建标签") },
+                text = { Text(stringResource(R.string.new_tag)) },
             )
         },
     ) { innerPadding ->
         if (state.rows.isEmpty()) {
             EmptyHint(
                 icon = Icons.Outlined.Sell,
-                title = "还没有标签",
-                subtitle = "标签用来做跨分组的横向归类，例如「待复习」「面试高频」",
+                title = stringResource(R.string.no_tags_yet),
+                subtitle = stringResource(R.string.tags_sort_notes_across_groups_e_g_to_review_inte),
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(innerPadding),
@@ -198,12 +200,12 @@ fun TagScreen(
     if (showNewDialog) {
         AlertDialog(
             onDismissRequest = { showNewDialog = false },
-            title = { Text("新建标签") },
+            title = { Text(stringResource(R.string.new_tag)) },
             text = {
                 OutlinedTextField(
                     value = newName,
                     onValueChange = { newName = it },
-                    label = { Text("标签名") },
+                    label = { Text(stringResource(R.string.tag_name)) },
                     singleLine = true,
                 )
             },
@@ -211,21 +213,21 @@ fun TagScreen(
                 TextButton(onClick = {
                     viewModel.create(newName)
                     showNewDialog = false
-                }) { Text("创建") }
+                }) { Text(stringResource(R.string.create)) }
             },
-            dismissButton = { TextButton(onClick = { showNewDialog = false }) { Text("取消") } },
+            dismissButton = { TextButton(onClick = { showNewDialog = false }) { Text(stringResource(R.string.cancel)) } },
         )
     }
 
     renameTarget?.let { target ->
         AlertDialog(
             onDismissRequest = { renameTarget = null },
-            title = { Text("重命名标签") },
+            title = { Text(stringResource(R.string.rename_tag)) },
             text = {
                 OutlinedTextField(
                     value = renameValue,
                     onValueChange = { renameValue = it },
-                    label = { Text("标签名") },
+                    label = { Text(stringResource(R.string.tag_name)) },
                     singleLine = true,
                 )
             },
@@ -233,9 +235,9 @@ fun TagScreen(
                 TextButton(onClick = {
                     viewModel.rename(target.id, renameValue)
                     renameTarget = null
-                }) { Text("保存") }
+                }) { Text(stringResource(R.string.save)) }
             },
-            dismissButton = { TextButton(onClick = { renameTarget = null }) { Text("取消") } },
+            dismissButton = { TextButton(onClick = { renameTarget = null }) { Text(stringResource(R.string.cancel)) } },
         )
     }
 
@@ -243,10 +245,10 @@ fun TagScreen(
         val candidates = state.rows.map { it.tag }.filter { it.id != source.id }
         AlertDialog(
             onDismissRequest = { mergeSource = null },
-            title = { Text("把「${source.name}」合并到…") },
+            title = { Text(stringResource(R.string.merge_source_name_into, source.name)) },
             text = {
                 if (candidates.isEmpty()) {
-                    Text("至少要有两个标签才能合并。")
+                    Text(stringResource(R.string.merging_needs_at_least_two_tags))
                 } else {
                     Column(
                         modifier = Modifier
@@ -261,14 +263,14 @@ fun TagScreen(
                                 },
                                 modifier = Modifier.fillMaxWidth(),
                             ) {
-                                Text("合并到「${candidate.name}」", modifier = Modifier.fillMaxWidth())
+                                Text(stringResource(R.string.merge_into_candidate_name, candidate.name), modifier = Modifier.fillMaxWidth())
                             }
                         }
                     }
                 }
             },
             confirmButton = {
-                TextButton(onClick = { mergeSource = null }) { Text("取消") }
+                TextButton(onClick = { mergeSource = null }) { Text(stringResource(R.string.cancel)) }
             },
         )
     }
@@ -276,15 +278,15 @@ fun TagScreen(
     deleteTarget?.let { target ->
         AlertDialog(
             onDismissRequest = { deleteTarget = null },
-            title = { Text("删除标签「${target.name}」") },
-            text = { Text("只会解除标签与笔记的关联，不会删除笔记本身。") },
+            title = { Text(stringResource(R.string.delete_tag_target_name, target.name)) },
+            text = { Text(stringResource(R.string.only_unlinks_the_tag_from_notes_the_notes_themse)) },
             confirmButton = {
                 TextButton(onClick = {
                     viewModel.delete(target.id)
                     deleteTarget = null
-                }) { Text("删除") }
+                }) { Text(stringResource(R.string.delete)) }
             },
-            dismissButton = { TextButton(onClick = { deleteTarget = null }) { Text("取消") } },
+            dismissButton = { TextButton(onClick = { deleteTarget = null }) { Text(stringResource(R.string.cancel)) } },
         )
     }
 }
@@ -298,9 +300,9 @@ private fun TagMenu(
     onDelete: () -> Unit,
 ) {
     DropdownMenu(expanded = expanded, onDismissRequest = onDismiss) {
-        DropdownMenuItem(text = { Text("重命名") }, onClick = { onDismiss(); onRename() })
-        DropdownMenuItem(text = { Text("合并到…") }, onClick = { onDismiss(); onMerge() })
-        DropdownMenuItem(text = { Text("删除") }, onClick = { onDismiss(); onDelete() })
+        DropdownMenuItem(text = { Text(stringResource(R.string.rename)) }, onClick = { onDismiss(); onRename() })
+        DropdownMenuItem(text = { Text(stringResource(R.string.merge_into)) }, onClick = { onDismiss(); onMerge() })
+        DropdownMenuItem(text = { Text(stringResource(R.string.delete)) }, onClick = { onDismiss(); onDelete() })
     }
 }
 
@@ -333,14 +335,14 @@ private fun TagRowCard(
                     fontWeight = FontWeight.Medium,
                 )
                 Text(
-                    text = "${row.noteCount} 条笔记",
+                    text = stringResource(R.string.row_notecount_notes, row.noteCount),
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
             Box {
                 IconButton(onClick = { menuOpen = true }) {
-                    Icon(Icons.Outlined.MoreVert, contentDescription = "更多操作")
+                    Icon(Icons.Outlined.MoreVert, contentDescription = stringResource(R.string.more_actions))
                 }
                 TagMenu(
                     expanded = menuOpen,
@@ -352,7 +354,7 @@ private fun TagRowCard(
             }
             Icon(
                 imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
-                contentDescription = "打开",
+                contentDescription = stringResource(R.string.open),
                 tint = MaterialTheme.colorScheme.outline,
             )
         }
@@ -392,7 +394,7 @@ private fun TagTile(
                     IconButton(onClick = { menuOpen = true }) {
                         Icon(
                             imageVector = Icons.Outlined.MoreVert,
-                            contentDescription = "更多操作",
+                            contentDescription = stringResource(R.string.more_actions),
                             modifier = Modifier.width(20.dp),
                         )
                     }
@@ -406,13 +408,13 @@ private fun TagTile(
                 }
             }
             Text(
-                text = "${row.noteCount} 条笔记",
+                text = stringResource(R.string.row_notecount_notes, row.noteCount),
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
-                    text = "查看笔记",
+                    text = stringResource(R.string.view_notes),
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.primary,
                 )

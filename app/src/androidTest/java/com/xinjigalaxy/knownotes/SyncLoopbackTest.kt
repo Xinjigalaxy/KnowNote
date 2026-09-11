@@ -90,7 +90,8 @@ class SyncLoopbackTest {
 
         assertNull(outcome.response)
         assertNotNull(outcome.error)
-        assertTrue("应把主机的拒绝原因透出来：${outcome.error}", outcome.error!!.contains("密钥"))
+        // 错密钥的提示是主机回的错误详情，走的是技术诊断（英文），这里不锁具体措辞只锁语义
+        assertTrue("应把主机的拒绝原因透出来：${outcome.error}", outcome.error!!.contains("key", ignoreCase = true))
     }
 
     @Test

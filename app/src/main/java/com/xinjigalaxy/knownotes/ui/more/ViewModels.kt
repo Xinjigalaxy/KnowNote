@@ -3,9 +3,11 @@ package com.xinjigalaxy.knownotes.ui.more
 import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.xinjigalaxy.knownotes.R
 import com.xinjigalaxy.knownotes.data.export.ExportFormat
 import com.xinjigalaxy.knownotes.data.export.Exporter
 import com.xinjigalaxy.knownotes.data.repo.NoteRepository
+import com.xinjigalaxy.knownotes.ui.components.UiMessage
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -42,7 +44,7 @@ class ExportViewModel(
     data class State(
         val format: ExportFormat = ExportFormat.JSON,
         val busy: Boolean = false,
-        val message: String? = null,
+        val message: UiMessage? = null,
         val stats: NoteRepository.Stats? = null,
     )
 
@@ -67,8 +69,23 @@ class ExportViewModel(
                 current.copy(
                     busy = false,
                     message = result.fold(
-                        onSuccess = { "已导出 ${it.fileName}（${formatBytes(it.bytes)}）" },
-                        onFailure = { "导出失败：${it.message ?: "未知错误"}" },
+                        onSuccess = { done ->
+                            if (done.bytes > 0L) {
+                                UiMessage(
+                                    R.string.exported_it_filename_formatbytes_it_bytes,
+                                    listOf(done.fileName, formatBytes(done.bytes)),
+                                )
+                            } else {
+                                // 写成功但 SAF 报不出长度：单独一条资源，不在代码里拼文案
+                                UiMessage(R.string.exported_1_s_size_unknown, listOf(done.fileName))
+                            }
+                        },
+                        onFailure = {
+                            UiMessage(
+                                R.string.export_failed_1_s,
+                                listOf(it.message ?: UiMessage(R.string.unknown_error)),
+                            )
+                        },
                     ),
                 )
             }
@@ -78,7 +95,6 @@ class ExportViewModel(
     fun consumeMessage() = _state.update { it.copy(message = null) }
 
     private fun formatBytes(bytes: Long): String = when {
-        bytes <= 0L -> "大小未知"
         bytes < 1024L -> "$bytes B"
         bytes < 1024L * 1024L -> String.format(java.util.Locale.US, "%.1f KB", bytes / 1024.0)
         else -> String.format(java.util.Locale.US, "%.2f MB", bytes / (1024.0 * 1024.0))

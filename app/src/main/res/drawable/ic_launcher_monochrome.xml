@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  单色层（Android 13+ 主题图标 / 动态取色用）。
+  只有 alpha 有效、颜色由系统给，所以这里必须是**单一颜色的剪影**：
+  以前 monochrome 直接指向彩色的 ic_launcher_foreground（白卡片 + 青色线条），
+  在主题图标模式下整块变成实心白方块 —— 线条和卡片是同 alpha，看不出来。
+  现在改成「外框 + 三条线」的镂空剪影，缩到 24dp 也能认出是张笔记。
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- 卡片外框：外圆角矩形挖掉内矩形（evenOdd），形成一圈 6dp 的边框 -->
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:fillType="evenOdd"
+        android:pathData="M37,27 L71,27 A8,8 0 0 1 79,35 L79,73 A8,8 0 0 1 71,81 L37,81 A8,8 0 0 1 29,73 L29,35 A8,8 0 0 1 37,27 Z
+                          M37,33 L71,33 A2,2 0 0 1 73,35 L73,73 A2,2 0 0 1 71,75 L37,75 A2,2 0 0 1 35,73 L35,35 A2,2 0 0 1 37,33 Z" />
+    <!-- 三条笔记线（长度递减） -->
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M42,42 L66,42 A2.5,2.5 0 0 1 66,47 L42,47 A2.5,2.5 0 0 1 42,42 Z" />
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M42,53 L66,53 A2.5,2.5 0 0 1 66,58 L42,58 A2.5,2.5 0 0 1 42,53 Z" />
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M42,64 L57,64 A2.5,2.5 0 0 1 57,69 L42,69 A2.5,2.5 0 0 1 42,64 Z" />
+</vector>

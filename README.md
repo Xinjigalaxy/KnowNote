@@ -1,15 +1,19 @@
-# KnowNote · 安卓零碎知识点记事本
+# KnowNote · 碎片笔记
 
-需求文档 `Desktop/harness/需求文档安卓记事本.md` 的 **1.0 demo 实现**，覆盖第一期「核心可用」范围。
-Kotlin + Jetpack Compose + **Material 3**，Room(SQLite) + 全文检索，MVVM + Repository。
+安卓记事本应用：Kotlin + Jetpack Compose + **Material 3**，Room(SQLite) + 全文检索（FTS5/FTS4/LIKE 三级降级），
+MVVM + Repository，局域网同步（一主多从）。
+
+应用名 **KnowNote**（中文「碎片笔记」/ 繁體「碎片筆記」），界面支持
+**跟随系统 / 简体中文 / 繁體中文 / English / 日本語**，应用图标带单色层（Android 13+ 主题图标）。
 
 - 包名：`com.xinjigalaxy.knownotes`（debug 变体带 `.debug` 后缀）
 - minSdk 26 / targetSdk 36 / compileSdk 36
-- 主题种子色 `#39C5BB`（初音绿），默认不吃 Android 12+ 动态取色
+- 主题种子色 `#39C5BB`，可选 Android 12+ 动态取色
+- 界面截图见 `docs/screenshots/`（模拟器 + 演示数据；同步页的密钥 / 设备标识 / 局域网地址已打码）
 
 ---
 
-## 一、已实现（对应需求文档第 7 章第一阶段）
+## 一、已实现（第一期：核心可用）
 
 | 需求 | 实现 |
 | --- | --- |
@@ -29,6 +33,8 @@ Kotlin + Jetpack Compose + **Material 3**，Room(SQLite) + 全文检索，MVVM +
 | 搜索历史与筛选记忆 | ✅ 搜索历史（同词合并计数、最多 12 条、chip 展示、可单删/清空）；标签与分组筛选写入 SharedPreferences |
 | 回收站 | ✅ 软删除笔记的恢复 / 彻底删除 / 清空（文档 5.1 没列，但软删除没有入口等于变相丢数据） |
 | 设置页 | ✅ 主题模式（跟随系统 / 浅色 / 深色，改完立即整树换肤，不必重建 Activity）、主题色（默认初音绿 / **Android 12+ 动态取色**，低版本置灰并说明原因）、回收站定时清理（WorkManager 每天一次 + 保留天数 7/30/90 + 「立即清理一次」+ 上次清理结果） |
+| 多语言 | ✅ 四语言界面（跟随系统 / 简中 / 繁中 / English / 日本語）：文案全部走 `res/values*`；ViewModel 侧用 `UiMessage`（资源 id + 参数）承载消息，界面再渲染。API 33+ 走系统 per-app language（`LocaleManager` + `locale_config`，与系统设置同步），低版本 `attachBaseContext` 包 Context 后重建 |
+| 应用图标 | ✅ 自适应图标 + **单色层**：monochrome 必须是单色剪影，指向彩色前景的话主题图标模式下会渲染成一块实心方块 |
 | 概览实时统计 | ✅ 「更多」页的在线笔记 / 标签分组 / 回收站 / 变更日志全部是 Room 的 Flow，任何写入自动重算（v1.4.0 修：以前是一次性查询，从回收站子页面回来数字不更新） |
 | 列表展示形态 | ✅ 列表 ↔ 瀑布流（两列 LazyVerticalStaggeredGrid）循环切换并记忆；**笔记页 / 分组页 / 标签页 / 二级页面共用同一份偏好** |
 | 二级页面 | ✅ 分组条目、标签条目点进去是独立页面（`group/{groupId}`、`tag/{tagId}` 路由）：左上返回、标题为分组名或 `#标签名`、常驻本页筛选框、状态行、与笔记页同款的卡片与列表 ↔ 瀑布流切换、点笔记进查看 / 长按进编辑 |
@@ -42,12 +48,12 @@ Kotlin + Jetpack Compose + **Material 3**，Room(SQLite) + 全文检索，MVVM +
 ## 二、构建与运行
 
 ```bash
-# 环境：JDK 17（D:\app\java17）、Android SDK（local.properties 已指向）
+# 环境：JDK 17 + Android SDK（local.properties 指向本机 SDK 路径，不入库）
 export JAVA_HOME="D:\\app\\java17"
 ./gradlew :app:assembleDebug          # 产物 app/build/outputs/apk/debug/app-debug.apk
 ./gradlew :app:installDebug           # 装到已连接设备
 ./gradlew :app:testDebugUnitTest      # 分词逻辑单测（纯 JVM，8 例）
-./gradlew :app:connectedDebugAndroidTest  # 真机/模拟器功能测试（7 例）
+./gradlew :app:connectedDebugAndroidTest  # 仪器化测试（35 例）
 ```
 
 > **注意**：wrapper 的 `distributionUrl` 指向华为镜像
@@ -93,13 +99,19 @@ data/sync/SyncServer.kt     主机侧手写 HTTP 服务（ServerSocket，无第�
 data/sync/SyncClient.kt     从机侧 HttpURLConnection 客户端 + 地址解析
 data/sync/SyncCoordinator.kt 一次「从机同步会话」：取增量 → 发送 → 落库 → 水位线 → 日志
 ui/…                        Compose 页面 + ViewModel（AppViewModelProvider 手工装配）
+ui/components/UiMessage.kt  ViewModel 侧可本地化消息（资源 id + 参数），界面负责渲染
+data/settings/AppSettings.kt 应用设置（主题 / 动态取色 / 回收站清理 / 语言），StateFlow 承载
+data/settings/AppLocales.kt  语言落地：33+ 交系统 LocaleManager，低版本包 Configuration
+data/settings/AppLanguage.kt 语言枚举（跟随系统 / 简中 / 繁中 / 英 / 日）
+res/values{,-zh,-zh-rTW,-ja}/strings.xml  四语言文案
+tools/                      辅助脚本：i18n 抽取与修复、截图打码、演示数据灌库
 ```
 
 ## 四、两个必须知道的 Android 平台坑（都已在真机上实测确认）
 
 ### 1. Android 系统 SQLite 没有 FTS5
 
-需求文档 3.1 选了 FTS5，但 **Android 自带的 SQLite 不保证编译 FTS5**。
+最初选型是 FTS5，但 **Android 自带的 SQLite 不保证编译 FTS5**。
 模拟器 Android 15（API 35，SQLite 3.44.3）实测：
 
 ```
@@ -172,29 +184,37 @@ W KnowNote: 全文检索引擎 FTS4 不可用: table notes_fts already exists ..
 | --- | --- |
 | `:app:assembleDebug` / `assembleRelease` | BUILD SUCCESSFUL |
 | 单元测试 `FtsTextTest` | 8/8 通过 |
-| 仪器化测试（Android 13 / SQLite 3.32.2，与用户手机同版本） | 35/35 通过（`tests="35" failures="0" errors="0"`） |
+| 仪器化测试（Android 13 / SQLite 3.32.2，与真机同版本） | 35/35 通过（`tests="35" failures="0" errors="0"`） |
 | 仪器化测试（Android 15 / SQLite 3.44.3） | 35/35 通过 |
 | 设置与统计测试 `SettingsAndStatsTest` | 4/4：概览统计**真的会随操作推送新值**（订阅 flow 记录每次发射，而不是每次重查一遍）、定时清理只清够老的那条且留墓碑、保留期清理整空、设置读写往返 |
 | 同步引擎测试 `SyncEngineTest` | 8/8：远端新建（分组按名字建 / 标签关联）、时间戳优先、**打平收敛**（两台设备互相同步后内容相同）、软删与墓碑传播、本地彻底删除留墓碑并可同步出去、增量取数、主机中转记日志而从机不记、本机无该条时忽略墓碑 |
 | 同步真回环测试 `SyncLoopbackTest` | 3/3：**真 ServerSocket + 真 HttpURLConnection、两个独立库**跑双向同步（拉 4 推 1 再同步幂等）、错密钥 401 且错误原因透出、无密钥拒绝启动 |
 | 迁移测试 `MigrationTest` | 3/3：1→2（`search_history`）、2→3（`guid` 回填 32 位十六进制且互不相同、`is_purged` 默认 0、`sync_log` 可写、**拿重复 guid 插入必须被唯一索引拒绝**）、1→3 跨级路径；三步都对 schema JSON 校验 |
 | 编辑页测试 `NoteEditViewModelTest` | 7/7（含「输入框待确认标签必须入库」「只看不改返回不刷新 updated_at」两个回归） |
-| APK 元信息 | minSdk 26 / targetSdk 36 / 标签「知识点记事本」 |
+| APK 元信息 | minSdk 26 / targetSdk 36 / 标签「KnowNote / 碎片笔记」 |
 | Room schema 导出 | `app/schemas/…/1.json`、`2.json`、`3.json` |
-| 真机检索（LG G8 / Android 13） | 中文子串「检索」命中 2 条、前缀 `gradle*` 命中 1 条、多词元 AND 命中正确 |
+| 真机检索（Android 13 真机） | 中文子串「检索」命中 2 条、前缀 `gradle*` 命中 1 条、多词元 AND 命中正确 |
 | 索引自愈 | 灌库时索引 0 条 → 启动后 8 条，与在线笔记数一致 |
 | **升级路径自愈（Android 13 / SQLite 3.32.2）** | v1.0.0 造出降级状态 → 覆盖装 v1.0.1 → 引擎恢复 FTS4，`FTS 索引条数对不上（0 → 8），已整体重建`，MATCH 查询全部命中 |
-| **真机迁移（LG G8，原有 3 条笔记）** | 覆盖装 v1.1.0 → `user_version` 1 升 2、`search_history` 建出、3 条笔记与索引全部保留 |
-| **真机二级页面（LG G8 / v1.2.1）** | 分组条目、标签条目点进去都是独立页面：左上「返回」按钮、标题为分组名、本页筛选框、状态行「共 3 条笔记」、与笔记页同款卡片；两页的列表 ↔ 瀑布流切换都生效；页内点笔记直接进「查看」预览；返回链路（笔记 → 二级页面 → 上级列表）逐级正确 |
-| **真机回归：只看不改不刷新时间（LG G8 / v1.2.1）** | 点开笔记 → 直接返回，列表里三条笔记的时间文字与点开前 **完全一致**（修复前会被无条件保存刷成「刚刚」） |
-| **真机迁移 v2→v3（LG G8，原有 3 条笔记 / v1.3.0）** | 覆盖装 v1.3.0 → `user_version` 2 升 3；`guid` 回填 **3/3 且唯一**（32 位十六进制，SQLite `randomblob(16)`）、`is_purged` 默认 0、`sync_log` 建出；3 条笔记与 FTS 索引全部完好 |
-| **真机同步·主机侧（LG G8 / v1.3.0）** | 开启主机后从 PC 直连真机接口：`GET /ping` → 200 `{"protocol":1,"device_name":"Android 13 真机"}`；错密钥 `POST /sync` → **401 共享密钥不匹配**；正确密钥推一条笔记 → 200（主机落库 1 条，并把 3 条真实笔记回给从机）。落库后：笔记数 3→4、分组「PC 测试分组」与标签「同步测试」按名字自动建出、FTS 索引 4 条、`sync_log` 记 `host | PC 侧测试 | 拉=3 推=1` |
-| **真机同步·App ↔ App（LG 当主机 / Android 13 模拟器当从机）** | 模拟器同步 → 拉到 4 条全部落库（含 PC 推的那条），分组 / 标签名字对齐、水位线写入 `sync_meta`；从机新建笔记后再次同步 → 「推过去 1 条，主机落库 1 条」，主机笔记数 3→5；第三次同步两边均无增量（水位线幂等） |
+| **真机迁移（Android 13 真机，原有 3 条笔记）** | 覆盖装 v1.1.0 → `user_version` 1 升 2、`search_history` 建出、3 条笔记与索引全部保留 |
+| **真机二级页面（Android 13 真机 / v1.2.1）** | 分组条目、标签条目点进去都是独立页面：左上「返回」按钮、标题为分组名、本页筛选框、状态行「共 3 条笔记」、与笔记页同款卡片；两页的列表 ↔ 瀑布流切换都生效；页内点笔记直接进「查看」预览；返回链路（笔记 → 二级页面 → 上级列表）逐级正确 |
+| **真机回归：只看不改不刷新时间（Android 13 真机 / v1.2.1）** | 点开笔记 → 直接返回，列表里三条笔记的时间文字与点开前 **完全一致**（修复前会被无条件保存刷成「刚刚」） |
+| **真机迁移 v2→v3（Android 13 真机，原有 3 条笔记 / v1.3.0）** | 覆盖装 v1.3.0 → `user_version` 2 升 3；`guid` 回填 **3/3 且唯一**（32 位十六进制，SQLite `randomblob(16)`）、`is_purged` 默认 0、`sync_log` 建出；3 条笔记与 FTS 索引全部完好 |
+| **真机同步·主机侧（Android 13 真机 / v1.3.0）** | 开启主机后从 PC 直连真机接口：`GET /ping` → 200 `{"protocol":1,"device_name":"<真机型号>"}`；错密钥 `POST /sync` → **401 共享密钥不匹配**；正确密钥推一条笔记 → 200（主机落库 1 条，并把 3 条真实笔记回给从机）。落库后：笔记数 3→4、分组「PC 测试分组」与标签「同步测试」按名字自动建出、FTS 索引 4 条、`sync_log` 记 `host | PC 侧测试 | 拉=3 推=1` |
+| **真机同步·App ↔ App（真机当主机 / Android 13 模拟器当从机）** | 模拟器同步 → 拉到 4 条全部落库（含 PC 推的那条），分组 / 标签名字对齐、水位线写入 `sync_meta`；从机新建笔记后再次同步 → 「推过去 1 条，主机落库 1 条」，主机笔记数 3→5；第三次同步两边均无增量（水位线幂等） |
 | **真机同步·日志（两侧）** | 主机侧 `host` 5 条、从机侧 `client` 4 条，字段（对端 / 拉取 / 推送 / 结果）逐条对得上实际行为 |
-| **真机回归：概览实时更新（LG G8 / v1.4.0）** | 长按笔记删除 → 「更多」页**立刻**显示 回收站 1 / 在线笔记 5→4 / 变更日志 +1，副标题变「1 条已删除笔记」；进回收站彻底删除 → 返回「更多」**计数自动变回 0**（修复前这里一直是旧数字）；库层面确认墓碑仍在（`is_purged=1`，为了同步），只是不再计入任何统计 |
-| **真机主题与设置（LG G8 / v1.4.0）** | 设置页「深色」选中后整个应用立即换肤（设置页与笔记页均为深色，未重建 Activity）；打开动态取色后配色明显变为壁纸取色（本机壁纸给出暖褐/红调）；「关于」显示 `1.4.0-demo`（版本号已改为读包信息）；回收站为空时「立即清理一次」正确置灰 |
+| **真机回归：概览实时更新（Android 13 真机 / v1.4.0）** | 长按笔记删除 → 「更多」页**立刻**显示 回收站 1 / 在线笔记 5→4 / 变更日志 +1，副标题变「1 条已删除笔记」；进回收站彻底删除 → 返回「更多」**计数自动变回 0**（修复前这里一直是旧数字）；库层面确认墓碑仍在（`is_purged=1`，为了同步），只是不再计入任何统计 |
+| **真机主题与设置（Android 13 真机 / v1.4.0）** | 设置页「深色」选中后整个应用立即换肤（设置页与笔记页均为深色，未重建 Activity）；打开动态取色后配色明显变为壁纸取色（本机壁纸给出暖褐/红调）；「关于」显示 `1.4.0-demo`（版本号已改为读包信息）；回收站为空时「立即清理一次」正确置灰 |
 
-界面截图见 `demo-shots/`（模拟器）与 `lg-shots/`（LG G8 真机）。
+### v1.5.0 真机验证（多语言与图标）
+
+| 检查项 | 结果 |
+| --- | --- |
+| 语言切换（Android 13 真机，API 33） | 设置页五选一：点 **English** 后整树变英文，系统侧同步为 `Locales for …debug are [en]`；点「跟随系统」回到 `[]`（走 `LocaleManager`） |
+| 应用名三语言 | 从 APK 读：`application-label:'KnowNote'`、`application-label-zh:'碎片笔记'`、`application-label-zh-TW:'碎片筆記'`，其余语言回落品牌名 |
+| 设置共存 | 切换语言后主题模式 / 动态取色 / 回收站清理设置全部保留（设置在 `AppSettings`，语言只影响资源解析） |
+| **真机发现并修复的插值 bug** | 切日语后设置页显示 `$days 日`、`${state.trashCount} 件` —— 抽取脚本只把**中文原文**的插值转成了 `%1$s`，四语言**译文**里的 `${...}` 却原样写进了资源，而 Android 资源不做模板展开。修法（`tools/i18n-fix-args.py`）：按**表达式文本**对齐编号而非出现顺序，日语把参数提到句首仍然正确（`同期完了：%1$s 件取得、この端末で %2$s 件反映`）。修后真机复验：日语 `0 件 / 7 日 / 前回のクリーンアップ 33 分前、0 件を削除`，英文 `0 items / 7 days / Last cleanup 33 minutes ago, removed 0` |
+| 图标单色层 | 修前 monochrome 指向彩色前景，主题图标模式下是一块实心方块；改为单色剪影后跟随系统取色 |
 
 ## 五之二、版本记录
 
@@ -209,7 +229,9 @@ W KnowNote: 全文检索引擎 FTS4 不可用: table notes_fts already exists ..
 | v1.3.0 | 第三阶段：**局域网同步**落地 —— 一主多从 + 手动触发、主机内嵌 HTTP 服务（手写 ServerSocket，无第三方依赖）、协议 `GET /ping` + `POST /sync`、一次请求双向增量、时间戳优先冲突裁决（打平按内容确定性收敛）、共享密钥认证；数据库 2→3 迁移（`notes.guid` 唯一索引 + `is_purged` 墓碑 + `sync_log`）；「彻底删除」由删行改墓碑；同步页从路标页换成真页面；顺带修「更多」页版本号写死的问题 |
 | v1.4.0 | 修「更多」页概览不刷新（一次性查询 → Room Flow 实时统计，回收站 / 变更日志等数字随写入自动更新）；新增**设置页**：主题模式（跟随系统 / 浅色 / 深色）、主题色（默认初音绿 / Android 12+ 动态取色）、回收站定时清理（WorkManager 每天一次 + 保留天数 + 立即清理）；`AppSettings` 用 StateFlow 承载设置，改主题立即换肤；顺带修「彻底删除」确认文案（v1.3.0 起不再物理删行，旧文案说"从数据库中永久移除"已不准确） |
 
-## 六、局域网同步（v1.3.0，需求文档 4 + 7 第三阶段）
+| v1.5.0 | **多语言 + 品牌化**：四语言界面（254 条去重文案抽成资源，API 33+ 用系统 per-app language）；改名 KnowNote / 碎片笔记 / 碎片筆記；图标补单色层（主题图标动态取色）；FTS 判定依据与同步日志等**诊断信息统一英文**；修一个只有上真机才会暴露的 bug —— 译文里的 Kotlin 模板被原样写进资源，日语界面显示出 `$days 日` 这类字面量（见第五节） |
+
+## 六、局域网同步（v1.3.0）
 
 ### 6.1 模式：一主多从 + 手动触发
 
@@ -240,7 +262,7 @@ W KnowNote: 全文检索引擎 FTS4 不可用: table notes_fts already exists ..
 - 主机收到从机的变更时会**记一条变更日志**（`at` 用主机收到的时刻），
   否则第三个从机永远拉不到「第二个从机改的内容」；从机侧则**不记**，免得把自己的库当新变更推回去。
 
-### 6.4 冲突：时间戳优先，打平按内容确定性收敛（需求文档 4.3）
+### 6.4 冲突：时间戳优先，打平按内容确定性收敛（设计决策）
 
 1. `updated_at` 大的那版整体覆盖（标题 / 正文 / 分组 / 标签 / 软删除 / 墓碑一次全换）；
 2. 本机更新就不动 —— 对端下次同步会拿到本机这版，按同样规则认输；

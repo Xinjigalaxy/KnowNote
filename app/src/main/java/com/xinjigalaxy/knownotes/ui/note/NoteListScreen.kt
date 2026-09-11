@@ -58,6 +58,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.res.stringResource
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -70,6 +71,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.xinjigalaxy.knownotes.R
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.xinjigalaxy.knownotes.data.model.NoteWithTags
@@ -99,24 +101,24 @@ fun NoteListScreen(
         topBar = {
             Column {
                 TopAppBar(
-                    title = { Text("知识点") },
+                    title = { Text(stringResource(R.string.notes_2)) },
                     actions = {
                         // 列表 ↔ 瀑布流 循环切换
                         LayoutToggleButton(layout = state.layout, onToggle = viewModel::toggleLayout)
                         Box {
                             IconButton(onClick = { groupMenuOpen = true }) {
-                                Icon(Icons.Outlined.FilterAlt, contentDescription = "按分组筛选")
+                                Icon(Icons.Outlined.FilterAlt, contentDescription = stringResource(R.string.filter_by_group))
                             }
                             DropdownMenu(
                                 expanded = groupMenuOpen,
                                 onDismissRequest = { groupMenuOpen = false },
                             ) {
                                 DropdownMenuItem(
-                                    text = { Text("全部分组") },
+                                    text = { Text(stringResource(R.string.all_groups)) },
                                     onClick = { viewModel.setGroupFilter(GROUP_ALL); groupMenuOpen = false },
                                 )
                                 DropdownMenuItem(
-                                    text = { Text("未分组") },
+                                    text = { Text(stringResource(R.string.ungrouped)) },
                                     onClick = { viewModel.setGroupFilter(GROUP_NONE); groupMenuOpen = false },
                                 )
                                 if (state.groups.isNotEmpty()) HorizontalDivider()
@@ -139,12 +141,12 @@ fun NoteListScreen(
                         .fillMaxWidth()
                         .padding(horizontal = 16.dp)
                         .onFocusChanged { viewModel.onSearchFocusChanged(it.isFocused) },
-                    placeholder = { Text("搜索标题 / 正文 / 标签") },
+                    placeholder = { Text(stringResource(R.string.search_title_body_tags)) },
                     leadingIcon = { Icon(Icons.Outlined.Search, contentDescription = null) },
                     trailingIcon = {
                         if (state.query.isNotEmpty()) {
                             IconButton(onClick = viewModel::clearQuery) {
-                                Icon(Icons.Outlined.Close, contentDescription = "清空")
+                                Icon(Icons.Outlined.Close, contentDescription = stringResource(R.string.clear))
                             }
                         }
                     },
@@ -195,15 +197,15 @@ fun NoteListScreen(
             ExtendedFloatingActionButton(
                 onClick = onCreateNote,
                 icon = { Icon(Icons.Filled.Add, contentDescription = null) },
-                text = { Text("记一条") },
+                text = { Text(stringResource(R.string.new_note_2)) },
             )
         },
     ) { innerPadding ->
         if (state.notes.isEmpty() && !state.loading) {
             EmptyHint(
                 icon = Icons.Outlined.StickyNote2,
-                title = if (state.filtered) "没有匹配的知识点" else "还没有记录",
-                subtitle = if (state.filtered) "换个关键词，或点右上角清空筛选" else "点右下角「记一条」，先把碎片记下来",
+                title = if (state.filtered) stringResource(R.string.no_matching_notes_2) else stringResource(R.string.no_records_yet),
+                subtitle = if (state.filtered) stringResource(R.string.try_another_keyword_or_clear_the_filters_in_the_) else stringResource(R.string.tap_new_note_at_the_bottom_right_to_jot_it_down),
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(innerPadding),
@@ -273,7 +275,7 @@ private fun StaggeredNoteCard(
             verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
             HighlightedText(
-                text = item.note.title.ifBlank { "未命名笔记" },
+                text = item.note.title.ifBlank { stringResource(R.string.untitled_note) },
                 terms = terms,
                 style = MaterialTheme.typography.titleSmall,
                 maxLines = 3,
@@ -335,7 +337,7 @@ private fun SearchHistoryPanel(
                 trailingIcon = {
                     Icon(
                         imageVector = Icons.Outlined.Close,
-                        contentDescription = "删除这条历史",
+                        contentDescription = stringResource(R.string.delete_this_history_entry),
                         modifier = Modifier
                             .size(16.dp)
                             .clickable { onDelete(entry.keyword) },
@@ -345,7 +347,7 @@ private fun SearchHistoryPanel(
         }
         AssistChip(
             onClick = onClearAll,
-            label = { Text("清空历史") },
+            label = { Text(stringResource(R.string.clear_history)) },
         )
     }
 }
@@ -366,13 +368,13 @@ private fun StatusLine(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(
-            text = if (filtered) "筛出 $shown / 共 $total 条" else "共 $total 条",
+            text = if (filtered) stringResource(R.string.showing_shown_of_total, shown, total) else stringResource(R.string.total_total, total),
             style = MaterialTheme.typography.labelMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         Spacer(Modifier.width(8.dp))
         Text(
-            text = if (searchEngineIsFullText) "· $searchEngine 全文索引" else "· $searchEngine",
+            text = if (searchEngineIsFullText) stringResource(R.string.searchengine_full_text_index, searchEngine) else "· $searchEngine",
             style = MaterialTheme.typography.labelMedium,
             color = if (searchEngineIsFullText) {
                 MaterialTheme.colorScheme.outline
@@ -382,7 +384,7 @@ private fun StatusLine(
         )
         Spacer(Modifier.weight(1f))
         if (filtered) {
-            TextButton(onClick = onClear) { Text("清空筛选") }
+            TextButton(onClick = onClear) { Text(stringResource(R.string.clear_filters)) }
         }
     }
 }

@@ -9,6 +9,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.res.stringResource
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -22,6 +23,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.xinjigalaxy.knownotes.R
 import androidx.compose.material3.Text as M3Text
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -66,13 +68,14 @@ private fun highlight(text: String, terms: List<String>, color: Color): Annotate
 }
 
 /** 相对时间：一周内用「多久前」，更早显示日期。 */
+@Composable
 fun formatTime(timestamp: Long): String {
     val diff = System.currentTimeMillis() - timestamp
     return when {
-        diff < 60_000L -> "刚刚"
-        diff < 3_600_000L -> "${diff / 60_000L} 分钟前"
-        diff < 86_400_000L -> "${diff / 3_600_000L} 小时前"
-        diff < 7 * 86_400_000L -> "${diff / 86_400_000L} 天前"
+        diff < 60_000L -> stringResource(R.string.just_now)
+        diff < 3_600_000L -> stringResource(R.string.diff_60_000l_minutes_ago, diff / 60_000L)
+        diff < 86_400_000L -> stringResource(R.string.diff_3_600_000l_hours_ago, diff / 3_600_000L)
+        diff < 7 * 86_400_000L -> stringResource(R.string.diff_86_400_000l_days_ago, diff / 86_400_000L)
         else -> SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date(timestamp))
     }
 }

@@ -1,5 +1,6 @@
 package com.xinjigalaxy.knownotes.ui
 
+import androidx.annotation.StringRes
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
@@ -17,6 +18,7 @@ import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.res.stringResource
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -28,6 +30,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import com.xinjigalaxy.knownotes.R
 import com.xinjigalaxy.knownotes.ui.manage.GroupNotesScreen
 import com.xinjigalaxy.knownotes.ui.manage.GroupScreen
 import com.xinjigalaxy.knownotes.ui.manage.TagNotesScreen
@@ -62,13 +65,18 @@ object Routes {
     fun edit(noteId: Long?, preview: Boolean): String = "edit?noteId=${noteId ?: 0L}&preview=$preview"
 }
 
-private data class Tab(val route: String, val label: String, val icon: ImageVector, val selectedIcon: ImageVector)
+private data class Tab(
+    val route: String,
+    @StringRes val labelRes: Int,
+    val icon: ImageVector,
+    val selectedIcon: ImageVector,
+)
 
 private val TABS = listOf(
-    Tab(Routes.NOTES, "笔记", Icons.Outlined.StickyNote2, Icons.Filled.StickyNote2),
-    Tab(Routes.GROUPS, "分组", Icons.Outlined.Folder, Icons.Filled.Folder),
-    Tab(Routes.TAGS, "标签", Icons.Outlined.Sell, Icons.Filled.Sell),
-    Tab(Routes.MORE, "更多", Icons.Outlined.MoreHoriz, Icons.Filled.MoreHoriz),
+    Tab(Routes.NOTES, R.string.notes, Icons.Outlined.StickyNote2, Icons.Filled.StickyNote2),
+    Tab(Routes.GROUPS, R.string.groups, Icons.Outlined.Folder, Icons.Filled.Folder),
+    Tab(Routes.TAGS, R.string.tags, Icons.Outlined.Sell, Icons.Filled.Sell),
+    Tab(Routes.MORE, R.string.more, Icons.Outlined.MoreHoriz, Icons.Filled.MoreHoriz),
 )
 
 @Composable
@@ -102,10 +110,10 @@ fun KnowNoteRoot() {
                             icon = {
                                 Icon(
                                     imageVector = if (selected) tab.selectedIcon else tab.icon,
-                                    contentDescription = tab.label,
+                                    contentDescription = stringResource(tab.labelRes),
                                 )
                             },
-                            label = { Text(tab.label) },
+                            label = { Text(stringResource(tab.labelRes)) },
                         )
                     }
                 }

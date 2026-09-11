@@ -1,0 +1,255 @@
+zh	en	zh-TW	ja
+SQLite 官方全文检索扩展，支持 bm25 相关度排序	Official SQLite full-text extension with bm25 ranking	SQLite 官方全文檢索擴充，支援 bm25 相關度排序	SQLite 公式の全文検索拡張、bm25 関連度順に対応
+老一代全文检索扩展，Android 系统 SQLite 稳定内置	Older full-text extension, bundled stably in Android's SQLite	舊一代全文檢索擴充，Android 系統 SQLite 穩定內建	旧世代の全文検索拡張、Android の SQLite に安定して組み込まれています
+LIKE 兜底	LIKE fallback	LIKE 備援	LIKE フォールバック
+没有可用全文索引，退化为 LIKE 子串扫描	No full-text index available, falling back to a LIKE substring scan	沒有可用的全文索引，退化為 LIKE 子字串掃描	利用可能な全文インデックスがなく、LIKE の部分一致スキャンに降格
+写入 FTS 索引失败（rowid=$noteId）: ${t.message}	Failed to write FTS index (rowid=$noteId): ${t.message}	寫入 FTS 索引失敗（rowid=$noteId）：${t.message}	FTS インデックスの書き込みに失敗（rowid=$noteId）：${t.message}
+检索语句失败，尝试降级：${t.message}	Query failed, trying a fallback: ${t.message}	檢索語句失敗，嘗試降級：${t.message}	検索クエリに失敗、フォールバックを試行：${t.message}
+未知	Unknown	未知	不明
+尚未探测	Not probed yet	尚未偵測	未検出
+清理不可用表后重建	Rebuilt	清理無法使用的表後重建	再構築
+同名表不可用且删不掉，降级 LIKE	Table with the same name is unusable and cannot be dropped, falling back to LIKE	同名表無法使用且刪不掉，降級 LIKE	同名テーブルが利用できず削除もできないため、LIKE にフォールバック
+沿用已有 ${existing.label} 索引	Reusing the existing ${existing.label} index	沿用現有的 ${existing.label} 索引	既存の ${existing.label} インデックスを再利用
+新建	Created	新建	新規作成
+$prefix ${engine.label} 索引	$prefix ${engine.label} index	$prefix ${engine.label} 索引	$prefix ${engine.label} インデックス
+无可用全文引擎，降级 LIKE	No full-text engine available, falling back to LIKE	無可用的全文引擎，降級 LIKE	利用可能な全文エンジンがなく、LIKE にフォールバック
+已有 $TABLE 不可用：${plain.exceptionOrNull()?.message}	Existing $TABLE unavailable: ${plain.exceptionOrNull()?.message}	現有 $TABLE 無法使用：${plain.exceptionOrNull()?.message}	既存の $TABLE が利用できません：${plain.exceptionOrNull()?.message}
+已有 $TABLE 无法用于检索：${plain.exceptionOrNull()?.message}	Existing $TABLE cannot be used for search: ${plain.exceptionOrNull()?.message}	現有 $TABLE 無法用於檢索：${plain.exceptionOrNull()?.message}	既存の $TABLE は検索に使用できません：${plain.exceptionOrNull()?.message}
+全文检索引擎 $module 不可用: ${t.message}	Full-text engine $module unavailable: ${t.message}	全文檢索引擎 $module 無法使用：${t.message}	全文検索エンジン $module を利用できません：${t.message}
+建表失败 $name: ${t.message}	Failed to create table $name: ${t.message}	建表失敗 $name：${t.message}	テーブル $name の作成に失敗：${t.message}
+清理不可用的 $TABLE 失败：${t.message}	Failed to clean up unusable $TABLE: ${t.message}	清理無法使用的 $TABLE 失敗：${t.message}	利用できない $TABLE のクリーンアップに失敗：${t.message}
+FTS 索引条数对不上（$indexed → $live），已整体重建	FTS index count mismatch ($indexed → $live), rebuilt	FTS 索引筆數對不上（$indexed → $live），已整體重建	FTS インデックス件数が不一致（$indexed → $live）、全体を再構築しました
+重建 FTS 索引失败: ${t.message}	Failed to rebuild FTS index: ${t.message}	重建 FTS 索引失敗：${t.message}	FTS インデックスの再構築に失敗：${t.message}
+结构化数据，含笔记 / 标签 / 分组及关联关系，便于程序化导入	Structured data with notes / tags / groups and links, easy to import programmatically	結構化資料，含筆記 / 標籤 / 群組及關聯關係，便於程式化匯入	構造化データ。ノート / タグ / グループと関連を含み、プログラムからの取り込みに便利
+表格化数据，便于人工查看或导入 Excel / WPS	Tabular data, easy to read or import into Excel / WPS	表格化資料，便於人工檢視或匯入 Excel / WPS	表形式のデータ。人が確認したり Excel / WPS に取り込むのに便利
+完整数据库文件，其他 SQLite 环境可直接打开	Full database file, openable in any SQLite environment	完整資料庫檔案，其他 SQLite 環境可直接開啟	完全なデータベースファイル、他の SQLite 環境でそのまま開けます
+无法打开目标文件写入流	Cannot open the output stream for the target file	無法開啟目標檔案寫入串流	出力先ファイルの書き込みストリームを開けません
+跟随系统	System default	跟隨系統	システムに従う
+浅色	Light	淺色	ライト
+深色	Dark	深色	ダーク
+主机返回的不是合法 JSON	Host returned invalid JSON	主機回傳的不是合法 JSON	ホストの応答が正しい JSON ではありません
+协议版本不一致（主机 $SYNC_PROTOCOL 期望 ${response.protocol}）	Protocol version mismatch (host $SYNC_PROTOCOL expects ${response.protocol})	協定版本不一致（主機 $SYNC_PROTOCOL 期望 ${response.protocol}）	プロトコルバージョンが不一致（ホスト $SYNC_PROTOCOL は ${response.protocol} を期待）
+未知错误	Unknown error	未知錯誤	不明なエラー
+本机落库 ${applied.changed} 条（新增 ${applied.inserted} / 更新 ${applied.updated}）	Applied ${applied.changed} here (${applied.inserted} new / ${applied.updated} updated)	本機寫入 ${applied.changed} 則（新增 ${applied.inserted} / 更新 ${applied.updated}）	この端末で ${applied.changed} 件反映（新規 ${applied.inserted} / 更新 ${applied.updated}）
+未命名设备	Unnamed device	未命名裝置	名前のない端末
+请先设置共享密钥：没有密钥的服务等于把笔记公开在局域网里	Set a shared key first: a server without a key exposes your notes to the whole LAN	請先設定共享密鑰：沒有密鑰的服務等於把筆記公開在區域網路裡	先に共有キーを設定してください。キーのないサーバーは、ノートを LAN に公開するのと同じです
+请求格式不合法	Invalid request format	請求格式不合法	リクエスト形式が不正です
+共享密钥不匹配	Shared key mismatch	共享密鑰不符	共有キーが一致しません
+请求体不是合法 JSON	Request body is not valid JSON	請求內文不是合法 JSON	リクエストボディが正しい JSON ではありません
+协议版本不一致，请把两台设备升到同一版本	Protocol version mismatch, update both devices to the same version	協定版本不一致，請把兩台裝置更新到同一版本	プロトコルバージョンが一致しません。両方の端末を同じバージョンに更新してください
+设备 ${request_.deviceId.take(8)} 接入	Device ${request_.deviceId.take(8)} connected	裝置 ${request_.deviceId.take(8)} 已接入	端末 ${request_.deviceId.take(8)} が接続しました
+没有这个接口	No such endpoint	沒有這個端點	そのようなエンドポイントはありません
+刚刚	Just now	剛剛	たった今
+${diff / 60_000L} 分钟前	${diff / 60_000L} minutes ago	${diff / 60_000L} 分鐘前	${diff / 60_000L} 分前
+${diff / 3_600_000L} 小时前	${diff / 3_600_000L} hours ago	${diff / 3_600_000L} 小時前	${diff / 3_600_000L} 時間前
+${diff / 86_400_000L} 天前	${diff / 86_400_000L} days ago	${diff / 86_400_000L} 天前	${diff / 86_400_000L} 日前
+未命名笔记	Untitled note	未命名筆記	無題のノート
+切换为列表视图	Switch to list view	切換為清單檢視	リスト表示に切替
+切换为瀑布流视图	Switch to grid view	切換為瀑布流檢視	グリッド表示に切替
+返回	Back	返回	戻る
+清空	Clear	清空	クリア
+共 ${notes.size} 条笔记	${notes.size} notes	共 ${notes.size} 則筆記	ノート ${notes.size} 件
+筛选出 ${filtered.size} / ${notes.size} 条	${filtered.size} / ${notes.size} shown	篩選出 ${filtered.size} / ${notes.size} 則	${notes.size} 件中 ${filtered.size} 件
+瀑布流	Grid	瀑布流	グリッド
+列表	List	清單	リスト
+这里还没有笔记	No notes here yet	這裡還沒有筆記	ここにはまだノートがありません
+没有匹配的笔记	No matching notes	沒有符合的筆記	一致するノートはありません
+在笔记编辑页把这条笔记归到该分组 / 打上该标签，就会出现在这里	Assign the note to this group / add this tag on the edit screen and it appears here	在筆記編輯頁把這則筆記歸到該群組 / 加上該標籤，就會出現在這裡	ノート編集画面でこのノートをグループに割り当てるかタグを付けると、ここに表示されます
+换个关键词试试	Try another keyword	換個關鍵字試試	別のキーワードをお試しください
+笔记	Notes	筆記	ノート
+分组	Groups	群組	グループ
+标签	Tags	標籤	タグ
+更多	More	更多	その他
+在本分组内筛选	Filter within this group	在本群組內篩選	このグループ内で絞り込み
+新建分组	New group	新建群組	グループを作成
+还没有分组	No groups yet	還沒有群組	グループはまだありません
+分组用来把知识点按主题归档，例如「Java 并发」「SQL 索引」	Groups archive notes by topic, e.g. "Java concurrency", "SQL indexes"	群組用來把筆記按主題歸檔，例如「Java 並發」「SQL 索引」	グループはノートをテーマ別に整理します。例：「Java 並行処理」「SQL インデックス」
+分组名	Group name	群組名稱	グループ名
+创建	Create	建立	作成
+取消	Cancel	取消	キャンセル
+重命名分组	Rename group	重新命名群組	グループ名を変更
+保存	Save	儲存	保存
+删除分组「${target.name}」	Delete group "${target.name}"	刪除群組「${target.name}」	グループ「${target.name}」を削除
+组内笔记要一起删除吗？「保留笔记」会把它们移到「无分组」。	Delete the notes in this group too? "Keep notes" moves them to "Ungrouped".	群組內的筆記要一起刪除嗎？「保留筆記」會把它們移到「未分組」。	グループ内のノートも一緒に削除しますか？「ノートを残す」を選ぶと「未分類」に移動します。
+保留笔记	Keep notes	保留筆記	ノートを残す
+一起删除	Delete together	一起刪除	まとめて削除
+重命名	Rename	重新命名	名前を変更
+上移	Move up	上移	上へ
+下移	Move down	下移	下へ
+删除	Delete	刪除	削除
+${row.noteCount} 条笔记	${row.noteCount} notes	${row.noteCount} 則筆記	ノート ${row.noteCount} 件
+更多操作	More actions	更多操作	その他の操作
+打开	Open	開啟	開く
+查看笔记	View notes	檢視筆記	ノートを表示
+在本标签内筛选	Filter within this tag	在本標籤內篩選	このタグ内で絞り込み
+新建标签	New tag	新建標籤	タグを作成
+还没有标签	No tags yet	還沒有標籤	タグはまだありません
+标签用来做跨分组的横向归类，例如「待复习」「面试高频」	Tags sort notes across groups, e.g. "To review", "Interview hits"	標籤用來做跨群組的橫向歸類，例如「待複習」「面試高頻」	タグはグループをまたいだ横断的な分類に使います。例：「復習待ち」「面接頻出」
+标签名	Tag name	標籤名稱	タグ名
+重命名标签	Rename tag	重新命名標籤	タグ名を変更
+把「${source.name}」合并到…	Merge "${source.name}" into…	把「${source.name}」合併到…	「${source.name}」の統合先…
+至少要有两个标签才能合并。	Merging needs at least two tags.	至少要有兩個標籤才能合併。	統合には少なくとも2つのタグが必要です。
+合并到「${candidate.name}」	Merge into "${candidate.name}"	合併到「${candidate.name}」	「${candidate.name}」に統合
+删除标签「${target.name}」	Delete tag "${target.name}"	刪除標籤「${target.name}」	タグ「${target.name}」を削除
+只会解除标签与笔记的关联，不会删除笔记本身。	Only unlinks the tag from notes; the notes themselves are kept.	只會解除標籤與筆記的關聯，不會刪除筆記本身。	タグとノートの関連付けを外すだけで、ノート自体は削除されません。
+合并到…	Merge into…	合併到…	統合先…
+导出数据	Export data	匯出資料	データをエクスポート
+导出内容包含笔记、标签、分组及其关联关系。SAF 保存，不需要存储权限。	Exports notes, tags, groups and their links. Saved via SAF, no storage permission needed.	匯出內容包含筆記、標籤、群組及其關聯關係。以 SAF 儲存，不需要儲存權限。	エクスポート内容にはノート、タグ、グループとその関連が含まれます。SAF で保存するため、ストレージ権限は不要です。
+本次导出预计包含	This export will contain	本次匯出預計包含	今回のエクスポートに含まれるもの
+笔记 ${state.stats?.notes ?: 0} 条 · 标签 ${state.stats?.tags ?: 0} 个 · 分组 ${state.stats?.groups ?: 0} 个	${state.stats?.notes ?: 0} notes · ${state.stats?.tags ?: 0} tags · ${state.stats?.groups ?: 0} groups	筆記 ${state.stats?.notes ?: 0} 則 · 標籤 ${state.stats?.tags ?: 0} 個 · 群組 ${state.stats?.groups ?: 0} 個	ノート ${state.stats?.notes ?: 0} 件 · タグ ${state.stats?.tags ?: 0} 件 · グループ ${state.stats?.groups ?: 0} 件
+文件名：${viewModel.suggestedName()}	File name: ${viewModel.suggestedName()}	檔案名稱：${viewModel.suggestedName()}	ファイル名：${viewModel.suggestedName()}
+导出中…	Exporting…	匯出中…	エクスポート中…
+选择保存位置并导出	Choose a location and export	選擇儲存位置並匯出	保存先を選択してエクスポート
+数据库概览	Database overview	資料庫概覽	データベース概要
+在线笔记	Active notes	線上筆記	有効なノート
+标签 / 分组	Tags / Groups	標籤 / 群組	タグ / グループ
+回收站（软删除）	Trash (soft delete)	回收筒（軟刪除）	ゴミ箱（ソフト削除）
+变更日志	Changelog	變更記錄	変更履歴
+全文检索	Full-text search	全文檢索	全文検索
+${viewModel.searchEngine} 已启用	${viewModel.searchEngine} enabled	${viewModel.searchEngine} 已啟用	${viewModel.searchEngine} 有効
+${viewModel.searchEngine}（无可用全文索引）	${viewModel.searchEngine} (no full-text index available)	${viewModel.searchEngine}（無可用的全文索引）	${viewModel.searchEngine}（利用可能な全文インデックスなし）
+设备标识	Device identifier	裝置識別碼	端末識別子
+SQLite 版本	SQLite version	SQLite 版本	SQLite バージョン
+判定依据	Decision basis	判定依據	判定根拠
+探测结果	Probe result	偵測結果	検出結果
+FTS5 与 FTS4 任一可用即无错误	No error while FTS5 or FTS4 is available	FTS5 與 FTS4 任一可用即無錯誤	FTS5 と FTS4 のいずれかが使えればエラーなし
+本机 SQLite 未提供全文索引，检索已降级为 LIKE 扫描；探测信息：${viewModel.searchEngineProbeError ?: "—"}	This device's SQLite provides no full-text index; search fell back to a LIKE scan. Probe: %1$s	本機 SQLite 未提供全文索引，搜尋已降級為 LIKE 掃描；探測資訊：%1$s	この端末の SQLite には全文インデックスが無いため、検索は LIKE スキャンに降格しました。検出情報：%1$s
+回收站	Trash	回收筒	ゴミ箱
+${stats?.deleted} 条已删除笔记，可恢复或彻底清除	${stats?.deleted} deleted notes you can restore or purge	${stats?.deleted} 則已刪除筆記，可還原或永久刪除	削除済みノート ${stats?.deleted} 件、復元または完全に削除できます
+长按删除的笔记会先落到这里	Notes deleted by long press land here first	長按刪除的筆記會先放到這裡	長押しで削除したノートはまずここに入ります
+支持 .json / .csv / .db 三种格式	Supports .json / .csv / .db	支援 .json / .csv / .db 三種格式	.json / .csv / .db の3形式に対応
+局域网同步	LAN sync	區域網路同步	LAN 同期
+第三阶段实现：一主多从 + 增量变更日志	Phase 3: one host with many clients + incremental change log	第三階段實作：一主多從 + 增量變更日誌	第3段階：1ホスト多クライアント + 増分変更ログ
+设置	Settings	設定	設定
+主题模式 / 动态取色 / 回收站定时清理	Theme mode / dynamic color / scheduled trash cleanup	主題模式 / 動態取色 / 回收筒定時清理	テーマモード / ダイナミックカラー / ゴミ箱の定期クリーンアップ
+关于	About	關於	このアプリについて
+关于 KnowNote	About KnowNote	關於 KnowNote	KnowNote について
+安卓零碎知识点记事本 · ${appVersion(context)}	KnowNote for Android · ${appVersion(context)}	Android 碎片筆記 · ${appVersion(context)}	KnowNote for Android · ${appVersion(context)}
+· Room(SQLite) + 全文检索（FTS5 优先，降级 FTS4 / LIKE）	· Room(SQLite) + full-text search (FTS5 first, falls back to FTS4 / LIKE)	· Room(SQLite) + 全文檢索（FTS5 優先，降級 FTS4 / LIKE）	· Room(SQLite) + 全文検索（FTS5 優先、FTS4 / LIKE にフォールバック）
+· MVVM + Repository，user_version 增量迁移 + 迁移测试	· MVVM + Repository, user_version incremental migrations + tests	· MVVM + Repository，user_version 增量遷移 + 遷移測試	· MVVM + Repository、user_version 增量マイグレーション + テスト
+· 中文按字切分做子串检索，结果高亮	· Chinese split per character for substring search, results highlighted	· 中文按字切分做子字串檢索，結果高亮	· 中国語は1文字ずつ分割して部分一致検索、結果をハイライト
+· Markdown 渲染、搜索历史、筛选记忆、回收站	· Markdown rendering, search history, filter memory, trash	· Markdown 渲染、搜尋歷史、篩選記憶、回收筒	· Markdown レンダリング、検索履歴、フィルタ記憶、ゴミ箱
+· 导出 .db / .json / .csv	· Export .db / .json / .csv	· 匯出 .db / .json / .csv	· .db / .json / .csv をエクスポート
+主题种子色 #39C5BB	Theme seed color #39C5BB	主題種子色 #39C5BB	テーマのシードカラー #39C5BB
+好	OK	好	OK
+本机	This device	本機	この端末
+设备名	Device name	裝置名稱	端末名
+设备 ID	Device ID	裝置 ID	端末 ID
+局域网地址	LAN address	區域網路位址	LAN アドレス
+未连上局域网（先连 WiFi）	Not on a LAN (connect to Wi-Fi first)	未連上區域網路（先連 Wi-Fi）	LAN に接続されていません（先に Wi-Fi に接続）
+刷新地址	Refresh address	重新整理位址	アドレスを更新
+共享密钥	Shared key	共享密鑰	共有キー
+两台设备必须填同一串，否则主机会直接拒绝（401）。这个串是唯一的门槛，别用 trivial 的。	Both devices must use the same key or the host rejects it (401). It is the only gate, so do not use a trivial one.	兩台裝置必須填同一組字串，否則主機會直接拒絕（401）。這組字串是唯一的門檻，別用太簡單的。	両方の端末に同じ文字列を入力してください。一致しないとホストが拒否します（401）。これが唯一の関門なので、簡単すぎる文字列は避けてください。
+密钥	Key	密鑰	キー
+复制	Copy	複製	コピー
+重新生成	Regenerate	重新產生	再生成
+主机模式（本机当主机）	Host mode (this device hosts)	主機模式（本機當主機）	ホストモード（この端末がホスト）
+监听中 · ${state.hostPort}	Listening · ${state.hostPort}	監聽中 · ${state.hostPort}	待ち受け中 · ${state.hostPort}
+未启动	Not started	未啟動	停止中
+已接待 ${state.servedRequests} 次同步请求	Served ${state.servedRequests} sync requests	已接待 ${state.servedRequests} 次同步請求	同期リクエストを ${state.servedRequests} 回処理しました
+打开后其他设备才能连过来	Other devices can connect only after you turn it on	開啟後其他裝置才能連過來	オンにすると他の端末から接続できます
+端口	Port	連接埠	ポート
+服务出错：$it	Service error: $it	服務發生錯誤：$it	サービスエラー：$it
+主机只在应用运行期间有效：这一版没做前台 Service，切后台久了会被系统回收。	The host is valid only while the app runs: this version has no foreground Service, so the system may reclaim it in the background.	主機只在應用程式執行期間有效：這一版沒有做前景 Service，切到背景久了會被系統回收。	ホストはアプリの実行中のみ有効です。このバージョンはフォアグラウンド Service 未対応のため、バックグラウンドに長時間置くとシステムに回収されます。
+从机模式（去拉主机）	Client mode (pull from host)	從機模式（去拉主機）	クライアントモード（ホストから取得）
+主机地址	Host address	主機位址	ホストアドレス
+192.168.1.20 或 192.168.1.20:8765	192.168.1.20 or 192.168.1.20:8765	192.168.1.20 或 192.168.1.20:8765	192.168.1.20 または 192.168.1.20:8765
+探测连通	Test connection	測試連線	接続テスト
+同步中…	Syncing…	同步中…	同期中…
+开始同步	Start sync	開始同步	同期を開始
+上次同步水位线：${formatTime(state.lastSyncAt)}	Last sync watermark: ${formatTime(state.lastSyncAt)}	上次同步水位線：${formatTime(state.lastSyncAt)}	前回の同期ウォーターマーク：${formatTime(state.lastSyncAt)}
+还没同步过	Never synced	還沒同步過	まだ同期していません
+同步日志	Sync log	同步日誌	同期ログ
+最近 ${state.log.size} 条	Latest ${state.log.size}	最近 ${state.log.size} 則	最新 ${state.log.size} 件
+还没有同步记录。第一次同步之后，这里会显示拉了/推了多少条、有没有冲突。	No sync records yet. After the first sync this shows how many notes were pulled or pushed and whether there were conflicts.	還沒有同步記錄。第一次同步之後，這裡會顯示拉取/推送了多少則、有沒有衝突。	同期履歴はまだありません。初回の同期後、ここに取得/送信した件数や競合の有無が表示されます。
+接客（主机）	Serving (host)	接客（主機）	接客（ホスト）
+上门（从机）	Outbound (client)	上門（從機）	訪問（クライアント）
+拉取 ${entry.pulled} 条 · 推送 ${entry.pushed} 条	Pulled ${entry.pulled} · Pushed ${entry.pushed}	拉取 ${entry.pulled} 則 · 推送 ${entry.pushed} 則	${entry.pulled} 件取得 · ${entry.pushed} 件送信
+ · 打平 ${entry.conflicts} 条	 · ${entry.conflicts} conflicts resolved	 · 打平 ${entry.conflicts} 則	 · 競合 ${entry.conflicts} 件を解決
+密钥已更换 —— 另一台设备也要填成这一串	Key changed — enter the same one on the other device	密鑰已更換 —— 另一台裝置也要填成這一組	キーを変更しました —— もう一方の端末にも同じ文字列を入力してください
+端口要在 1–65535 之间	Port must be between 1 and 65535	連接埠要在 1–65535 之間	ポートは 1〜65535 の範囲で入力してください
+本机IP	Local IP	本機 IP	この端末の IP
+主机已启动：另一台设备填 $ip:$port	Host started: enter $ip:$port on the other device	主機已啟動：另一台裝置填 $ip:$port	ホストを起動しました：もう一方の端末に $ip:$port を入力
+主机启动失败：${e.message}	Failed to start host: ${e.message}	主機啟動失敗：${e.message}	ホストの起動に失敗：${e.message}
+主机已停止监听	Host stopped listening	主機已停止監聽	ホストは待ち受けを停止しました
+主机地址填得不对，示例：192.168.1.20 或 192.168.1.20:8765	Invalid host address, e.g. 192.168.1.20 or 192.168.1.20:8765	主機位址填得不對，範例：192.168.1.20 或 192.168.1.20:8765	ホストアドレスが正しくありません。例：192.168.1.20 または 192.168.1.20:8765
+正在探测 ${parsed.first}:${parsed.second} …	Probing ${parsed.first}:${parsed.second} …	正在偵測 ${parsed.first}:${parsed.second} …	${parsed.first}:${parsed.second} を確認中 …
+能连通 ${parsed.first}:${parsed.second}（主机在线）	Reachable ${parsed.first}:${parsed.second} (host is online)	可連通 ${parsed.first}:${parsed.second}（主機在線）	${parsed.first}:${parsed.second} に接続できます（ホストはオンライン）
+连不上 ${parsed.first}:${parsed.second} —— 检查两台设备是否同一 WiFi、主机是否已启动	Cannot reach ${parsed.first}:${parsed.second} — check that both devices are on the same Wi-Fi and the host is running	連不上 ${parsed.first}:${parsed.second} —— 檢查兩台裝置是否同一 Wi-Fi、主機是否已啟動	${parsed.first}:${parsed.second} に接続できません —— 両方の端末が同じ Wi-Fi か、ホストが起動しているか確認してください
+请先填共享密钥（要和主机一致）	Enter the shared key first (it must match the host)	請先填共享密鑰（要和主機一致）	先に共有キーを入力してください（ホストと同じである必要があります）
+正在与 $host:$port 同步…	Syncing with $host:$port…	正在與 $host:$port 同步…	$host:$port と同期中…
+同步完成：拉到 ${session.pulled} 条，本机落库 ${session.applied.changed} 条，	Sync complete: pulled ${session.pulled}, applied ${session.applied.changed} on this device,	同步完成：拉取 ${session.pulled} 則，本機寫入 ${session.applied.changed} 則，	同期完了：${session.pulled} 件取得、この端末で ${session.applied.changed} 件反映、
+推过去 ${session.pushed} 条（主机落库 ${session.peerApplied} 条）	Pushed ${session.pushed} (host applied ${session.peerApplied})	推送 ${session.pushed} 則（主機寫入 ${session.peerApplied} 則）	${session.pushed} 件を送信（ホスト側で ${session.peerApplied} 件反映）
+；时间戳打平 ${session.conflicts} 条（按内容取较大版以保证两端收敛）	; ${session.conflicts} timestamp conflicts resolved (larger version wins so both ends converge)	；時間戳打平 ${session.conflicts} 則（依內容取較大版本以確保兩端收斂）	；タイムスタンプの競合 ${session.conflicts} 件を解決（内容の大きい方を採用し両端で収束）
+同步失败：${e.message}	Sync failed: ${e.message}	同步失敗：${e.message}	同期に失敗：${e.message}
+已导出 ${it.fileName}（${formatBytes(it.bytes)}）	Exported ${it.fileName} (${formatBytes(it.bytes)})	已匯出 ${it.fileName}（${formatBytes(it.bytes)}）	${it.fileName} をエクスポートしました（${formatBytes(it.bytes)}）
+导出失败：${it.message ?: "未知错误"}	Export failed: %1$s	匯出失敗：%1$s	書き出しに失敗しました：%1$s
+大小未知	Size unknown	大小未知	サイズ不明
+新建知识点	New note	新增筆記	ノートを作成
+编辑知识点	Edit note	編輯筆記	ノートを編集
+切到编辑	Switch to edit	切換到編輯	編集に切替
+预览 Markdown	Preview Markdown	預覽 Markdown	Markdown をプレビュー
+标题	Title	標題	タイトル
+正文	Body	內文	本文
+零碎知识点随手记，支持代码片段原样粘贴	Jot fragmented notes anytime, code snippets paste as-is	零碎筆記隨手記，支援程式碼片段原樣貼上	思いついたことを気軽にメモ、コード片もそのまま貼り付けられます
+无分组	No group	無群組	グループなし
+＋ 新建分组	＋ New group	＋ 新建群組	＋ グループを作成
+还没有标签，下面输入即可新建	No tags yet, type below to create one	還沒有標籤，下方輸入即可新建	タグはまだありません。下の欄に入力すると作成できます
+＋ 新建「$pending」	＋ New "$pending"	＋ 新建「$pending」	＋ 「$pending」を作成
+添加标签	Add tag	新增標籤	タグを追加
+创建于 ${formatFullTime(state.createdAt)} · 更新于 ${formatFullTime(state.updatedAt)}	Created ${formatFullTime(state.createdAt)} · Updated ${formatFullTime(state.updatedAt)}	建立於 ${formatFullTime(state.createdAt)} · 更新於 ${formatFullTime(state.updatedAt)}	作成 ${formatFullTime(state.createdAt)} · 更新 ${formatFullTime(state.updatedAt)}
+删除这条知识点？	Delete this note?	刪除這則筆記？	このノートを削除しますか？
+笔记会进入回收站（软删除），可随时恢复，也可以在那里彻底清除。	The note goes to Trash (soft delete) and can be restored anytime, or permanently deleted there.	筆記會進入回收筒（軟刪除），可隨時還原，也可以在那裡永久清除。	ノートはゴミ箱に入り（ソフト削除）、いつでも復元できます。そこで完全に削除することもできます。
+正文还是空的，点右上角切回编辑写点什么	Body is still empty, tap the top right to switch back to editing and write something	內文還是空的，點右上角切回編輯寫點什麼	本文がまだ空です。右上をタップして編集に戻り、何か書いてみましょう
+预览模式 · 支持 # 标题、**粗体**、`代码`、``` 代码块、- 列表、> 引用	Preview mode · supports # headings, **bold**, `code`, ``` blocks, - lists, > quotes	預覽模式 · 支援 # 標題、**粗體**、`程式碼`、``` 程式碼區塊、- 清單、> 引用	プレビューモード · # 見出し、**太字**、`コード`、``` コードブロック、- リスト、> 引用に対応
+知识点	Notes	筆記	ノート
+按分组筛选	Filter by group	依群組篩選	グループで絞り込み
+全部分组	All groups	全部分組	すべてのグループ
+未分组	Ungrouped	未分組	未分類
+搜索标题 / 正文 / 标签	Search title / body / tags	搜尋標題 / 內文 / 標籤	タイトル / 本文 / タグを検索
+记一条	New note	記一則	ノートを追加
+没有匹配的知识点	No matching notes	沒有符合的筆記	一致するノートはありません
+还没有记录	No records yet	還沒有記錄	まだ記録がありません
+换个关键词，或点右上角清空筛选	Try another keyword or clear the filters in the top right	換個關鍵字，或點右上角清除篩選	別のキーワードを試すか、右上の絞り込み解除をタップしてください
+点右下角「记一条」，先把碎片记下来	Tap "New note" at the bottom right to jot it down	點右下角「記一則」，先把碎片記下來	右下の「ノートを追加」をタップして、まずメモしておきましょう
+删除这条历史	Delete this history entry	刪除這筆歷史	この履歴を削除
+清空历史	Clear history	清空歷史	履歴を消去
+筛出 $shown / 共 $total 条	Showing $shown of $total	篩出 $shown / 共 $total 則	$total 件中 $shown 件を表示
+共 $total 条	$total total	共 $total 則	合計 $total 件
+· $searchEngine 全文索引	· $searchEngine full-text index	· $searchEngine 全文索引	· $searchEngine 全文インデックス
+清空筛选	Clear filters	清除篩選	絞り込みを解除
+外观	Appearance	外觀	外観
+主题模式	Theme mode	主題模式	テーマモード
+动态取色（Android 12+）	Dynamic color (Android 12+)	動態取色（Android 12+）	ダイナミックカラー（Android 12+）
+跟随壁纸生成主题色；关掉则用默认的初音绿 #39C5BB	Generate theme colors from the wallpaper; turn off to use the default Miku green #39C5BB	跟隨桌布產生主題色；關掉則用預設的初音綠 #39C5BB	壁紙からテーマカラーを生成します。オフにすると既定の初音ミクグリーン #39C5BB を使用
+本机是 Android ${Build.VERSION.RELEASE}，系统不支持动态取色	This device runs Android ${Build.VERSION.RELEASE}, which does not support dynamic color	本機是 Android ${Build.VERSION.RELEASE}，系統不支援動態取色	この端末は Android ${Build.VERSION.RELEASE} のため、ダイナミックカラーは利用できません
+当前回收站	Current trash	目前回收筒	現在のゴミ箱
+${state.trashCount} 条	${state.trashCount} items	${state.trashCount} 則	${state.trashCount} 件
+定时清理	Scheduled cleanup	定時清理	定期クリーンアップ
+超过保留天数的笔记会被彻底删除（不可恢复）	Notes older than the retention period are permanently deleted (no recovery)	超過保留天數的筆記會被永久刪除（不可還原）	保持日数を超えたノートは完全に削除されます（復元できません）
+保留天数	Retention days	保留天數	保持日数
+$days 天	$days days	$days 天	$days 日
+清理中…	Cleaning…	清理中…	クリーンアップ中…
+立即清理一次	Clean up now	立即清理一次	今すぐクリーンアップ
+上次清理 ${formatTime(state.lastPurgeAt)}，删了 ${state.lastPurgeCount} 条	Last cleanup ${formatTime(state.lastPurgeAt)}, removed ${state.lastPurgeCount}	上次清理 ${formatTime(state.lastPurgeAt)}，刪了 ${state.lastPurgeCount} 則	前回のクリーンアップ ${formatTime(state.lastPurgeAt)}、${state.lastPurgeCount} 件を削除
+定时清理走 WorkManager，每天一次；应用没打开也会执行。	Scheduled cleanup runs on WorkManager once a day, even when the app is closed.	定時清理走 WorkManager，每天一次；應用程式沒開啟也會執行。	定期クリーンアップは WorkManager で1日1回実行され、アプリを開いていなくても動作します。
+清理结果同样会同步给其他设备（走墓碑，不是偷偷删行）。	Cleanup results also sync to other devices (via tombstones, not silent row deletes).	清理結果同樣會同步給其他裝置（走墓碑，不是偷偷刪列）。	クリーンアップ結果も他の端末に同期されます（トゥームストーン経由で、行の隠し削除ではありません）。
+知道了	Got it	知道了	わかりました
+设置都保存在 SharedPreferences（knownotes_ui），不参与同步、不写进导出文件。	Settings live in SharedPreferences (knownotes_ui); they are not synced or written to export files.	設定都保存在 SharedPreferences（knownotes_ui），不參與同步、不寫進匯出檔案。	設定は SharedPreferences（knownotes_ui）に保存され、同期もエクスポートもされません。
+已开启：系统会在合适时机每天清理一次回收站	On: the system cleans the trash once a day	已開啟：系統會在適當時機每天清理一次回收筒	オン：システムが適切なタイミングで1日1回ゴミ箱を整理します
+已关闭定时清理，回收站里的笔记会一直留着	Scheduled cleanup off; trashed notes are kept indefinitely	已關閉定時清理，回收筒裡的筆記會一直留著	定期クリーンアップはオフです。ゴミ箱のノートは残り続けます
+清理失败，请重试	Cleanup failed, try again	清理失敗，請重試	クリーンアップに失敗しました。もう一度お試しください
+没有超过 $days 天的笔记需要清理	No notes older than $days days to clean up	沒有超過 $days 天的筆記需要清理	$days 日を超えたノートはなく、クリーンアップの対象はありません
+已彻底删除 $removed 条超过 $days 天的笔记（其他设备下次同步也会跟着删）	Permanently deleted $removed notes older than $days days (other devices delete them on next sync)	已永久刪除 $removed 則超過 $days 天的筆記（其他裝置下次同步也會跟著刪除）	$days 日を超えたノート $removed 件を完全に削除しました（他の端末も次回の同期で削除されます）
+回收站是空的	Trash is empty	回收筒是空的	ゴミ箱は空です
+列表里长按删除的笔记会先落到这里，可以随时恢复	Notes deleted from the list land here first and can be restored anytime	在清單中長按刪除的筆記會先放到這裡，可隨時還原	一覧で長押しして削除したノートはまずここに入り、いつでも復元できます
+已恢复到笔记列表	Restored to the notes list	已還原到筆記清單	ノート一覧に復元しました
+彻底删除这条笔记？	Delete this note permanently?	永久刪除這則筆記？	このノートを完全に削除しますか？
+「${target.note.title.ifBlank { "未命名笔记" }}」会从列表与检索里永久消失，本机无法恢复；	"%1$s" will disappear from the list and search permanently; this device cannot recover it.	「%1$s」會從清單與搜尋中永久消失，本機無法還原；	「%1$s」は一覧と検索から完全に消え、この端末では復元できません。
+删除状态会同步给其他设备。	The deletion syncs to your other devices.	刪除狀態會同步給其他裝置。	削除状態は他の端末にも同期されます。
+彻底删除	Delete permanently	永久刪除	完全に削除
+清空回收站？	Empty the trash?	清空回收筒？	ゴミ箱を空にしますか？
+当前 ${notes.size} 条笔记会从列表与检索里永久消失，本机无法恢复；	The current ${notes.size} notes will disappear from the list and search permanently; this device cannot recover them;	目前 ${notes.size} 則筆記會從清單與搜尋中永久消失，本機無法還原；	現在のノート ${notes.size} 件は一覧と検索から永久に消え、この端末では復元できません；
+已永久删除 $removed 条	Permanently deleted $removed	已永久刪除 $removed 則	$removed 件を完全に削除しました
+删除于 ${formatTime(item.note.updatedAt)}	Deleted ${formatTime(item.note.updatedAt)}	刪除於 ${formatTime(item.note.updatedAt)}	削除日時 ${formatTime(item.note.updatedAt)}
+恢复	Restore	還原	復元

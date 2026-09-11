@@ -88,7 +88,7 @@ data class SyncRequest(
     companion object {
         fun fromJson(o: JSONObject): SyncRequest = SyncRequest(
             deviceId = o.getString("device_id"),
-            deviceName = o.optString("device_name", "未命名设备"),
+            deviceName = o.optString("device_name", "Unnamed device"),
             lastSyncAt = o.optLong("last_sync_at", 0L),
             notes = o.optJSONArray("notes")?.let { arr ->
                 (0 until arr.length()).map { SyncNote.fromJson(arr.getJSONObject(it)) }
@@ -123,7 +123,7 @@ data class SyncResponse(
         fun fromJson(o: JSONObject): SyncResponse = SyncResponse(
             protocol = o.optInt("protocol", 0),
             deviceId = o.optString("device_id", ""),
-            deviceName = o.optString("device_name", "未命名设备"),
+            deviceName = o.optString("device_name", "Unnamed device"),
             serverTime = o.optLong("server_time", 0L),
             notes = o.optJSONArray("notes")?.let { arr ->
                 (0 until arr.length()).map { SyncNote.fromJson(arr.getJSONObject(it)) }

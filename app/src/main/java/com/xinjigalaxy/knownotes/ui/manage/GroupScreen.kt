@@ -37,6 +37,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.res.stringResource
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -45,6 +46,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.xinjigalaxy.knownotes.R
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
@@ -125,7 +127,7 @@ fun GroupScreen(
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
         topBar = {
             TopAppBar(
-                title = { Text("分组") },
+                title = { Text(stringResource(R.string.groups)) },
                 actions = {
                     LayoutToggleButton(layout = state.layout, onToggle = viewModel::toggleLayout)
                 },
@@ -135,15 +137,15 @@ fun GroupScreen(
             ExtendedFloatingActionButton(
                 onClick = { newName = ""; showNewDialog = true },
                 icon = { Icon(Icons.Filled.Add, contentDescription = null) },
-                text = { Text("新建分组") },
+                text = { Text(stringResource(R.string.new_group)) },
             )
         },
     ) { innerPadding ->
         if (state.rows.isEmpty()) {
             EmptyHint(
                 icon = Icons.Outlined.Folder,
-                title = "还没有分组",
-                subtitle = "分组用来把知识点按主题归档，例如「Java 并发」「SQL 索引」",
+                title = stringResource(R.string.no_groups_yet),
+                subtitle = stringResource(R.string.groups_archive_notes_by_topic_e_g_java_concurren),
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(innerPadding),
@@ -194,12 +196,12 @@ fun GroupScreen(
     if (showNewDialog) {
         AlertDialog(
             onDismissRequest = { showNewDialog = false },
-            title = { Text("新建分组") },
+            title = { Text(stringResource(R.string.new_group)) },
             text = {
                 OutlinedTextField(
                     value = newName,
                     onValueChange = { newName = it },
-                    label = { Text("分组名") },
+                    label = { Text(stringResource(R.string.group_name)) },
                     singleLine = true,
                 )
             },
@@ -207,21 +209,21 @@ fun GroupScreen(
                 TextButton(onClick = {
                     viewModel.create(newName)
                     showNewDialog = false
-                }) { Text("创建") }
+                }) { Text(stringResource(R.string.create)) }
             },
-            dismissButton = { TextButton(onClick = { showNewDialog = false }) { Text("取消") } },
+            dismissButton = { TextButton(onClick = { showNewDialog = false }) { Text(stringResource(R.string.cancel)) } },
         )
     }
 
     renameTarget?.let { target ->
         AlertDialog(
             onDismissRequest = { renameTarget = null },
-            title = { Text("重命名分组") },
+            title = { Text(stringResource(R.string.rename_group)) },
             text = {
                 OutlinedTextField(
                     value = renameValue,
                     onValueChange = { renameValue = it },
-                    label = { Text("分组名") },
+                    label = { Text(stringResource(R.string.group_name)) },
                     singleLine = true,
                 )
             },
@@ -229,28 +231,28 @@ fun GroupScreen(
                 TextButton(onClick = {
                     viewModel.rename(target.id, renameValue)
                     renameTarget = null
-                }) { Text("保存") }
+                }) { Text(stringResource(R.string.save)) }
             },
-            dismissButton = { TextButton(onClick = { renameTarget = null }) { Text("取消") } },
+            dismissButton = { TextButton(onClick = { renameTarget = null }) { Text(stringResource(R.string.cancel)) } },
         )
     }
 
     deleteTarget?.let { target ->
         AlertDialog(
             onDismissRequest = { deleteTarget = null },
-            title = { Text("删除分组「${target.name}」") },
-            text = { Text("组内笔记要一起删除吗？「保留笔记」会把它们移到「无分组」。") },
+            title = { Text(stringResource(R.string.delete_group_target_name, target.name)) },
+            text = { Text(stringResource(R.string.delete_the_notes_in_this_group_too_keep_notes_mo)) },
             confirmButton = {
                 TextButton(onClick = {
                     viewModel.delete(target.id, keepNotes = true)
                     deleteTarget = null
-                }) { Text("保留笔记") }
+                }) { Text(stringResource(R.string.keep_notes)) }
             },
             dismissButton = {
                 TextButton(onClick = {
                     viewModel.delete(target.id, keepNotes = false)
                     deleteTarget = null
-                }) { Text("一起删除") }
+                }) { Text(stringResource(R.string.delete_together)) }
             },
         )
     }
@@ -266,10 +268,10 @@ private fun GroupMenu(
     onDelete: () -> Unit,
 ) {
     DropdownMenu(expanded = expanded, onDismissRequest = onDismiss) {
-        DropdownMenuItem(text = { Text("重命名") }, onClick = { onDismiss(); onRename() })
-        DropdownMenuItem(text = { Text("上移") }, onClick = { onDismiss(); onMoveUp() })
-        DropdownMenuItem(text = { Text("下移") }, onClick = { onDismiss(); onMoveDown() })
-        DropdownMenuItem(text = { Text("删除") }, onClick = { onDismiss(); onDelete() })
+        DropdownMenuItem(text = { Text(stringResource(R.string.rename)) }, onClick = { onDismiss(); onRename() })
+        DropdownMenuItem(text = { Text(stringResource(R.string.move_up)) }, onClick = { onDismiss(); onMoveUp() })
+        DropdownMenuItem(text = { Text(stringResource(R.string.move_down)) }, onClick = { onDismiss(); onMoveDown() })
+        DropdownMenuItem(text = { Text(stringResource(R.string.delete)) }, onClick = { onDismiss(); onDelete() })
     }
 }
 
@@ -303,14 +305,14 @@ private fun GroupRowCard(
                     fontWeight = FontWeight.Medium,
                 )
                 Text(
-                    text = "${row.noteCount} 条笔记",
+                    text = stringResource(R.string.row_notecount_notes, row.noteCount),
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
             Box {
                 IconButton(onClick = { menuOpen = true }) {
-                    Icon(Icons.Outlined.MoreVert, contentDescription = "更多操作")
+                    Icon(Icons.Outlined.MoreVert, contentDescription = stringResource(R.string.more_actions))
                 }
                 GroupMenu(
                     expanded = menuOpen,
@@ -323,7 +325,7 @@ private fun GroupRowCard(
             }
             Icon(
                 imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
-                contentDescription = "打开",
+                contentDescription = stringResource(R.string.open),
                 tint = MaterialTheme.colorScheme.outline,
             )
         }
@@ -362,7 +364,7 @@ private fun GroupTile(
                     IconButton(onClick = { menuOpen = true }) {
                         Icon(
                             imageVector = Icons.Outlined.MoreVert,
-                            contentDescription = "更多操作",
+                            contentDescription = stringResource(R.string.more_actions),
                             modifier = Modifier.width(20.dp),
                         )
                     }
@@ -377,13 +379,13 @@ private fun GroupTile(
                 }
             }
             Text(
-                text = "${row.noteCount} 条笔记",
+                text = stringResource(R.string.row_notecount_notes, row.noteCount),
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
-                    text = "查看笔记",
+                    text = stringResource(R.string.view_notes),
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.primary,
                 )

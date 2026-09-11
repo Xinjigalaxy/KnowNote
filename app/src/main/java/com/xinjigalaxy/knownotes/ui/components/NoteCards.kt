@@ -16,6 +16,7 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
@@ -26,6 +27,7 @@ import androidx.compose.material.icons.outlined.ViewAgenda
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.ui.unit.dp
+import com.xinjigalaxy.knownotes.R
 import com.xinjigalaxy.knownotes.data.model.NoteWithTags
 import com.xinjigalaxy.knownotes.ui.NoteLayout
 
@@ -57,7 +59,7 @@ fun NoteCard(
             verticalArrangement = Arrangement.spacedBy(6.dp),
         ) {
             HighlightedText(
-                text = item.note.title.ifBlank { "未命名笔记" },
+                text = item.note.title.ifBlank { stringResource(R.string.untitled_note) },
                 terms = terms,
                 style = MaterialTheme.typography.titleMedium,
                 maxLines = 1,
@@ -128,7 +130,7 @@ fun LayoutToggleButton(
             } else {
                 Icons.Outlined.GridView
             },
-            contentDescription = if (layout == NoteLayout.STAGGERED) "切换为列表视图" else "切换为瀑布流视图",
+            contentDescription = if (layout == NoteLayout.STAGGERED) stringResource(R.string.switch_to_list_view) else stringResource(R.string.switch_to_grid_view),
         )
     }
 }
@@ -156,7 +158,7 @@ fun StaggeredNoteCard(
             verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
             HighlightedText(
-                text = item.note.title.ifBlank { "未命名笔记" },
+                text = item.note.title.ifBlank { stringResource(R.string.untitled_note) },
                 terms = terms,
                 style = MaterialTheme.typography.titleSmall,
                 maxLines = 3,

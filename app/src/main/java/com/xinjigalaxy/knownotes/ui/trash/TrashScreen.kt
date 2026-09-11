@@ -28,6 +28,8 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -38,6 +40,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.xinjigalaxy.knownotes.R
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.xinjigalaxy.knownotes.data.model.NoteWithTags
@@ -59,6 +62,7 @@ fun TrashScreen(
     val notes by viewModel.notes.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
+    val context = LocalContext.current
     var purgeTarget by remember { mutableStateOf<NoteWithTags?>(null) }
     var confirmEmpty by remember { mutableStateOf(false) }
 
@@ -67,13 +71,13 @@ fun TrashScreen(
             TopAppBar(
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.back))
                     }
                 },
-                title = { Text("回收站") },
+                title = { Text(stringResource(R.string.trash)) },
                 actions = {
                     if (notes.isNotEmpty()) {
-                        TextButton(onClick = { confirmEmpty = true }) { Text("清空") }
+                        TextButton(onClick = { confirmEmpty = true }) { Text(stringResource(R.string.clear)) }
                     }
                 },
             )
@@ -83,8 +87,8 @@ fun TrashScreen(
         if (notes.isEmpty()) {
             EmptyHint(
                 icon = Icons.Outlined.DeleteOutline,
-                title = "回收站是空的",
-                subtitle = "列表里长按删除的笔记会先落到这里，可以随时恢复",
+                title = stringResource(R.string.trash_is_empty),
+                subtitle = stringResource(R.string.notes_deleted_from_the_list_land_here_first_and_),
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(innerPadding),
@@ -102,7 +106,7 @@ fun TrashScreen(
                         item = item,
                         onRestore = {
                             viewModel.restore(item.note.id)
-                            scope.launch { snackbarHostState.showSnackbar("已恢复到笔记列表") }
+                            scope.launch { snackbarHostState.showSnackbar(context.getString(R.string.restored_to_the_notes_list)) }
                         },
                         onPurge = { purgeTarget = item },
                     )
@@ -114,42 +118,42 @@ fun TrashScreen(
     purgeTarget?.let { target ->
         AlertDialog(
             onDismissRequest = { purgeTarget = null },
-            title = { Text("彻底删除这条笔记？") },
+            title = { Text(stringResource(R.string.delete_this_note_permanently)) },
             text = {
                 Text(
-                    "「${target.note.title.ifBlank { "未命名笔记" }}」会从列表与检索里永久消失，本机无法恢复；" +
-                        "删除状态会同步给其他设备。"
+                    stringResource(R.string.s_1_s_will_disappear_from_the_list_and_search_pe, target.note.title.ifBlank { stringResource(R.string.untitled_note) }) +
+                        stringResource(R.string.the_deletion_syncs_to_your_other_devices)
                 )
             },
             confirmButton = {
                 TextButton(onClick = {
                     viewModel.purge(target.note.id)
                     purgeTarget = null
-                }) { Text("彻底删除") }
+                }) { Text(stringResource(R.string.delete_permanently)) }
             },
-            dismissButton = { TextButton(onClick = { purgeTarget = null }) { Text("取消") } },
+            dismissButton = { TextButton(onClick = { purgeTarget = null }) { Text(stringResource(R.string.cancel)) } },
         )
     }
 
     if (confirmEmpty) {
         AlertDialog(
             onDismissRequest = { confirmEmpty = false },
-            title = { Text("清空回收站？") },
+            title = { Text(stringResource(R.string.empty_the_trash)) },
             text = {
                 Text(
-                    "当前 ${notes.size} 条笔记会从列表与检索里永久消失，本机无法恢复；" +
-                        "删除状态会同步给其他设备。"
+                    stringResource(R.string.the_current_notes_size_notes_will_disappear_from, notes.size) +
+                        stringResource(R.string.the_deletion_syncs_to_your_other_devices)
                 )
             },
             confirmButton = {
                 TextButton(onClick = {
                     confirmEmpty = false
                     viewModel.purgeAll { removed ->
-                        scope.launch { snackbarHostState.showSnackbar("已永久删除 $removed 条") }
+                        scope.launch { snackbarHostState.showSnackbar(context.getString(R.string.permanently_deleted_removed, removed)) }
                     }
-                }) { Text("清空") }
+                }) { Text(stringResource(R.string.clear)) }
             },
-            dismissButton = { TextButton(onClick = { confirmEmpty = false }) { Text("取消") } },
+            dismissButton = { TextButton(onClick = { confirmEmpty = false }) { Text(stringResource(R.string.cancel)) } },
         )
     }
 }
@@ -173,7 +177,7 @@ private fun TrashCard(
         ) {
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = item.note.title.ifBlank { "未命名笔记" },
+                    text = item.note.title.ifBlank { stringResource(R.string.untitled_note) },
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Medium,
                     maxLines = 1,
@@ -189,18 +193,18 @@ private fun TrashCard(
                     )
                 }
                 Text(
-                    text = "删除于 ${formatTime(item.note.updatedAt)}",
+                    text = stringResource(R.string.deleted_formattime_item_note_updatedat, formatTime(item.note.updatedAt)),
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.outline,
                 )
             }
             IconButton(onClick = onRestore) {
-                Icon(Icons.Outlined.Restore, contentDescription = "恢复")
+                Icon(Icons.Outlined.Restore, contentDescription = stringResource(R.string.restore))
             }
             IconButton(onClick = onPurge) {
                 Icon(
                     Icons.Outlined.DeleteForever,
-                    contentDescription = "彻底删除",
+                    contentDescription = stringResource(R.string.delete_permanently),
                     tint = MaterialTheme.colorScheme.error,
                 )
             }

@@ -30,6 +30,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.res.stringResource
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -39,6 +40,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.xinjigalaxy.knownotes.R
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.compose.ui.platform.LocalContext
@@ -67,7 +69,7 @@ fun MoreScreen(
 
     Scaffold(
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
-        topBar = { TopAppBar(title = { Text("更多") }) },
+        topBar = { TopAppBar(title = { Text(stringResource(R.string.more)) }) },
     ) { innerPadding ->
         LazyColumn(
             modifier = Modifier
@@ -86,33 +88,33 @@ fun MoreScreen(
                         verticalArrangement = Arrangement.spacedBy(6.dp),
                     ) {
                         Text(
-                            text = "数据库概览",
+                            text = stringResource(R.string.database_overview),
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Medium,
                             color = MaterialTheme.colorScheme.onPrimaryContainer,
                         )
-                        StatsRow("在线笔记", stats?.notes?.toString() ?: "—")
-                        StatsRow("标签 / 分组", "${stats?.tags ?: 0} / ${stats?.groups ?: 0}")
-                        StatsRow("回收站（软删除）", stats?.deleted?.toString() ?: "0")
-                        StatsRow("变更日志", stats?.changeLog?.toString() ?: "0")
+                        StatsRow(stringResource(R.string.active_notes), stats?.notes?.toString() ?: "—")
+                        StatsRow(stringResource(R.string.tags_groups), "${stats?.tags ?: 0} / ${stats?.groups ?: 0}")
+                        StatsRow(stringResource(R.string.trash_soft_delete), stats?.deleted?.toString() ?: "0")
+                        StatsRow(stringResource(R.string.changelog), stats?.changeLog?.toString() ?: "0")
                         StatsRow(
-                            "全文检索",
+                            stringResource(R.string.full_text_search),
                             if (viewModel.searchEngineIsFullText) {
-                                "${viewModel.searchEngine} 已启用"
+                                stringResource(R.string.viewmodel_searchengine_enabled, viewModel.searchEngine)
                             } else {
-                                "${viewModel.searchEngine}（无可用全文索引）"
+                                stringResource(R.string.viewmodel_searchengine_no_full_text_index_availa, viewModel.searchEngine)
                             },
                         )
-                        StatsRow("设备标识", viewModel.deviceId)
-                        StatsRow("SQLite 版本", viewModel.sqliteVersion)
-                        StatsRow("判定依据", viewModel.searchEngineDecision)
+                        StatsRow(stringResource(R.string.device_identifier), viewModel.deviceId)
+                        StatsRow(stringResource(R.string.sqlite_version), viewModel.sqliteVersion)
+                        StatsRow(stringResource(R.string.decision_basis), viewModel.searchEngineDecision)
                         StatsRow(
-                            "探测结果",
-                            viewModel.searchEngineProbeError ?: "FTS5 与 FTS4 任一可用即无错误",
+                            stringResource(R.string.probe_result),
+                            viewModel.searchEngineProbeError ?: stringResource(R.string.no_error_while_fts5_or_fts4_is_available),
                         )
                         if (!viewModel.searchEngineIsFullText) {
                             Text(
-                                text = "本机 SQLite 未提供全文索引，检索已降级为 LIKE 扫描；探测信息：${viewModel.searchEngineProbeError ?: "—"}",
+                                text = stringResource(R.string.this_device_s_sqlite_provides_no_full_text_index, viewModel.searchEngineProbeError ?: "—"),
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.error,
                             )
@@ -124,11 +126,11 @@ fun MoreScreen(
             item {
                 EntryCard(
                     icon = Icons.Outlined.DeleteOutline,
-                    title = "回收站",
+                    title = stringResource(R.string.trash),
                     subtitle = if ((stats?.deleted ?: 0) > 0) {
-                        "${stats?.deleted} 条已删除笔记，可恢复或彻底清除"
+                        stringResource(R.string.stats_deleted_deleted_notes_you_can_restore_or_p, stats?.deleted ?: 0)
                     } else {
-                        "长按删除的笔记会先落到这里"
+                        stringResource(R.string.notes_deleted_by_long_press_land_here_first)
                     },
                     onClick = onOpenTrash,
                 )
@@ -137,8 +139,8 @@ fun MoreScreen(
             item {
                 EntryCard(
                     icon = Icons.Outlined.FileDownload,
-                    title = "导出数据",
-                    subtitle = "支持 .json / .csv / .db 三种格式",
+                    title = stringResource(R.string.export_data),
+                    subtitle = stringResource(R.string.supports_json_csv_db),
                     onClick = onOpenExport,
                 )
             }
@@ -146,8 +148,8 @@ fun MoreScreen(
             item {
                 EntryCard(
                     icon = Icons.Outlined.Sync,
-                    title = "局域网同步",
-                    subtitle = "第三阶段实现：一主多从 + 增量变更日志",
+                    title = stringResource(R.string.lan_sync),
+                    subtitle = stringResource(R.string.phase_3_one_host_with_many_clients_incremental_c),
                     onClick = onOpenSync,
                 )
             }
@@ -155,8 +157,8 @@ fun MoreScreen(
             item {
                 EntryCard(
                     icon = Icons.Outlined.Settings,
-                    title = "设置",
-                    subtitle = "主题模式 / 动态取色 / 回收站定时清理",
+                    title = stringResource(R.string.settings),
+                    subtitle = stringResource(R.string.theme_mode_dynamic_color_scheduled_trash_cleanup),
                     onClick = onOpenSettings,
                 )
             }
@@ -164,7 +166,7 @@ fun MoreScreen(
             item {
                 EntryCard(
                     icon = Icons.Outlined.Info,
-                    title = "关于",
+                    title = stringResource(R.string.about),
                     subtitle = "KnowNote ${appVersion(context)}（Material 3）",
                     onClick = { showAbout = true },
                 )
@@ -175,21 +177,21 @@ fun MoreScreen(
     if (showAbout) {
         AlertDialog(
             onDismissRequest = { showAbout = false },
-            title = { Text("关于 KnowNote") },
+            title = { Text(stringResource(R.string.about_knownote)) },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Text("安卓零碎知识点记事本 · ${appVersion(context)}")
+                    Text(stringResource(R.string.knownote_for_android_appversion_context, appVersion(context)))
                     HorizontalDivider()
                     Text("· Kotlin + Jetpack Compose + Material 3")
-                    Text("· Room(SQLite) + 全文检索（FTS5 优先，降级 FTS4 / LIKE）")
-                    Text("· MVVM + Repository，user_version 增量迁移 + 迁移测试")
-                    Text("· 中文按字切分做子串检索，结果高亮")
-                    Text("· Markdown 渲染、搜索历史、筛选记忆、回收站")
-                    Text("· 导出 .db / .json / .csv")
-                    Text("主题种子色 #39C5BB")
+                    Text(stringResource(R.string.room_sqlite_full_text_search_fts5_first_falls_ba))
+                    Text(stringResource(R.string.mvvm_repository_user_version_incremental_migrati))
+                    Text(stringResource(R.string.chinese_split_per_character_for_substring_search))
+                    Text(stringResource(R.string.markdown_rendering_search_history_filter_memory_))
+                    Text(stringResource(R.string.export_db_json_csv))
+                    Text(stringResource(R.string.theme_seed_color_39c5bb))
                 }
             },
-            confirmButton = { TextButton(onClick = { showAbout = false }) { Text("好") } },
+            confirmButton = { TextButton(onClick = { showAbout = false }) { Text(stringResource(R.string.ok)) } },
         )
     }
 }

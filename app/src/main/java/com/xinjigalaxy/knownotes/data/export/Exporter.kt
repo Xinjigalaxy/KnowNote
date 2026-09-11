@@ -2,6 +2,8 @@ package com.xinjigalaxy.knownotes.data.export
 
 import android.content.Context
 import android.net.Uri
+import androidx.annotation.StringRes
+import com.xinjigalaxy.knownotes.R
 import com.xinjigalaxy.knownotes.data.db.AppDatabase
 import com.xinjigalaxy.knownotes.data.model.Group
 import com.xinjigalaxy.knownotes.data.model.NoteWithTags
@@ -17,30 +19,30 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
-/** 导出格式（需求文档 2.3）。 */
+/** 导出格式（需求文档 2.3）。label 是格式名（JSON / CSV / SQLite .db），与语言无关，不进资源。 */
 enum class ExportFormat(
     val ext: String,
     val mime: String,
     val label: String,
-    val description: String,
+    @StringRes val descriptionRes: Int,
 ) {
     JSON(
         ext = "json",
         mime = "application/json",
         label = "JSON",
-        description = "结构化数据，含笔记 / 标签 / 分组及关联关系，便于程序化导入",
+        descriptionRes = R.string.structured_data_with_notes_tags_groups_and_links,
     ),
     CSV(
         ext = "csv",
         mime = "text/csv",
         label = "CSV",
-        description = "表格化数据，便于人工查看或导入 Excel / WPS",
+        descriptionRes = R.string.tabular_data_easy_to_read_or_import_into_excel_w,
     ),
     DB(
         ext = "db",
         mime = "application/octet-stream",
         label = "SQLite .db",
-        description = "完整数据库文件，其他 SQLite 环境可直接打开",
+        descriptionRes = R.string.full_database_file_openable_in_any_sqlite_enviro,
     ),
     ;
 
@@ -94,7 +96,7 @@ class Exporter(
 
     private inline fun writeText(target: Uri, body: (OutputStream) -> Unit): Long {
         val stream = context.contentResolver.openOutputStream(target, "wt")
-            ?: error("无法打开目标文件写入流")
+            ?: error(context.getString(R.string.cannot_open_the_output_stream_for_the_target_fil))
         stream.use { out ->
             body(out)
             out.flush()
@@ -202,7 +204,7 @@ class Exporter(
             }
 
             val stream = context.contentResolver.openOutputStream(target, "wt")
-                ?: error("无法打开目标文件写入流")
+                ?: error(context.getString(R.string.cannot_open_the_output_stream_for_the_target_fil))
             return stream.use { out ->
                 tmp.inputStream().use { input -> input.copyTo(out) }
                 tmp.length()

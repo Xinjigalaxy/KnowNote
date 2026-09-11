@@ -28,6 +28,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.res.stringResource
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -36,6 +37,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.xinjigalaxy.knownotes.R
 import com.xinjigalaxy.knownotes.data.model.NoteWithTags
 import com.xinjigalaxy.knownotes.ui.NoteLayout
 
@@ -82,7 +84,7 @@ fun NoteCollectionScreen(
             TopAppBar(
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.back))
                     }
                 },
                 title = { Text(title, maxLines = 1, overflow = TextOverflow.Ellipsis) },
@@ -106,7 +108,7 @@ fun NoteCollectionScreen(
                 trailingIcon = {
                     if (query.isNotEmpty()) {
                         IconButton(onClick = { query = "" }) {
-                            Icon(Icons.Outlined.Close, contentDescription = "清空")
+                            Icon(Icons.Outlined.Close, contentDescription = stringResource(R.string.clear))
                         }
                     }
                 },
@@ -121,16 +123,16 @@ fun NoteCollectionScreen(
             ) {
                 Text(
                     text = if (query.isBlank()) {
-                        "共 ${notes.size} 条笔记"
+                        stringResource(R.string.notes_size_notes, notes.size)
                     } else {
-                        "筛选出 ${filtered.size} / ${notes.size} 条"
+                        stringResource(R.string.filtered_size_notes_size_shown, filtered.size, notes.size)
                     },
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.outline,
                 )
                 Spacer(Modifier.weight(1f))
                 Text(
-                    text = if (layout == NoteLayout.STAGGERED) "瀑布流" else "列表",
+                    text = if (layout == NoteLayout.STAGGERED) stringResource(R.string.grid) else stringResource(R.string.list),
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.outline,
                 )
@@ -139,11 +141,11 @@ fun NoteCollectionScreen(
             if (filtered.isEmpty()) {
                 EmptyHint(
                     icon = Icons.AutoMirrored.Outlined.StickyNote2,
-                    title = if (query.isBlank()) "这里还没有笔记" else "没有匹配的笔记",
+                    title = if (query.isBlank()) stringResource(R.string.no_notes_here_yet) else stringResource(R.string.no_matching_notes),
                     subtitle = if (query.isBlank()) {
-                        "在笔记编辑页把这条笔记归到该分组 / 打上该标签，就会出现在这里"
+                        stringResource(R.string.assign_the_note_to_this_group_add_this_tag_on_th)
                     } else {
-                        "换个关键词试试"
+                        stringResource(R.string.try_another_keyword)
                     },
                     modifier = Modifier.fillMaxSize(),
                 )
