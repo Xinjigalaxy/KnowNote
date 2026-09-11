@@ -20,6 +20,7 @@ import com.xinjigalaxy.knownotes.data.model.SyncMeta
 import com.xinjigalaxy.knownotes.data.model.Tag
 import com.xinjigalaxy.knownotes.data.sync.SyncNote
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.combine
 import java.util.UUID
 
 /**
@@ -56,8 +57,33 @@ class NoteRepository(
     fun observeTags(): Flow<List<Tag>> = tagDao.observeAll()
     fun observeGroups(): Flow<List<Group>> = groupDao.observeAll()
     fun observeLiveCount(): Flow<Int> = noteDao.observeLiveCount()
+    fun observeDeletedCount(): Flow<Int> = noteDao.observeDeletedCount()
     fun observeGroupCounts(): Flow<List<GroupCount>> = noteDao.observeGroupCounts()
     fun observeTagCounts(): Flow<List<TagCount>> = noteDao.observeTagCounts()
+
+    /**
+     * 「更多」页概览的**实时**统计。
+     *
+     * 以前是一次性 `stats()`，于是从回收站子页面删完东西回来，那行「N 条已删除笔记」
+     * 还是旧数字（v1.4.0 反馈的 bug）。改成 combine 各个 COUNT(*) 的 Flow，
+     * 只要 notes / tags / groups / change_log 有写入就会自动重算。
+     */
+    fun observeStats(): Flow<Stats> = combine(
+        noteDao.observeLiveCount(),
+        noteDao.observeDeletedCount(),
+        tagDao.observeCount(),
+        groupDao.observeCount(),
+        logDao.observeCount(),
+    ) { live, deleted, tags, groups, changeLog ->
+        Stats(
+            notes = live,
+            tags = tags,
+            groups = groups,
+            deleted = deleted,
+            changeLog = changeLog,
+            rawBytes = 0L,
+        )
+    }
 
     suspend fun note(id: Long): NoteWithTags? = noteDao.withTags(id)
 
@@ -167,6 +193,26 @@ class NoteRepository(
 
     suspend fun purgeDeleted(): Int = db.withTransaction {
         val targets = noteDao.purgeCandidates()
+        val now = System.currentTimeMillis()
+        targets.forEach {
+            noteDao.purge(it.id, now)
+            fts.remove(it.id)
+            logDao.log(ChangeLogEntry(op = OP_DELETE, noteId = it.id, deviceId = deviceId))
+        }
+        targets.size
+    }
+
+    /**
+     * 定时清理：把回收站里「放进来的时间早于 N 天」的笔记彻底删掉（立墓碑，和手动删同一套语义）。
+     *
+     * 用 `updated_at` 当年龄依据：软删除会刷新它，所以它就是「进回收站的时间」。
+     * 走墓碑 + 记变更日志，这样定时清理的结果同样能同步给对端 —— 不然对端会把它们推回来。
+     */
+    suspend fun purgeTrashOlderThan(days: Int): Int =
+        purgeTrashBefore(System.currentTimeMillis() - days * DAY_MILLIS)
+
+    suspend fun purgeTrashBefore(cutoff: Long): Int = db.withTransaction {
+        val targets = noteDao.purgeCandidates().filter { it.updatedAt < cutoff }
         val now = System.currentTimeMillis()
         targets.forEach {
             noteDao.purge(it.id, now)
@@ -448,5 +494,7 @@ class NoteRepository(
         const val OP_UPDATE = "update"
         const val OP_DELETE = "delete"
         const val OP_RESTORE = "restore"
+
+        const val DAY_MILLIS = 24L * 60L * 60L * 1000L
     }
 }

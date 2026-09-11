@@ -5,6 +5,7 @@ import androidx.lifecycle.viewmodel.CreationExtras
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import com.xinjigalaxy.knownotes.KnowNoteApp
+import com.xinjigalaxy.knownotes.data.settings.TrashCleanupScheduler
 import com.xinjigalaxy.knownotes.ui.manage.GroupNotesViewModel
 import com.xinjigalaxy.knownotes.ui.manage.GroupViewModel
 import com.xinjigalaxy.knownotes.ui.manage.TagNotesViewModel
@@ -14,6 +15,7 @@ import com.xinjigalaxy.knownotes.ui.more.MoreViewModel
 import com.xinjigalaxy.knownotes.ui.more.SyncViewModel
 import com.xinjigalaxy.knownotes.ui.note.NoteEditViewModel
 import com.xinjigalaxy.knownotes.ui.note.NoteListViewModel
+import com.xinjigalaxy.knownotes.ui.settings.SettingsViewModel
 import com.xinjigalaxy.knownotes.ui.trash.TrashViewModel
 
 object AppViewModelProvider {
@@ -28,6 +30,14 @@ object AppViewModelProvider {
         initializer { TrashViewModel(app().container.repository) }
         initializer { ExportViewModel(app().container.repository, app().container.exporter) }
         initializer { MoreViewModel(app().container.repository) }
+        initializer {
+            SettingsViewModel(
+                repo = app().container.repository,
+                settings = app().container.settings,
+                prefs = app().container.uiPrefs,
+                scheduleCleanup = { enabled -> TrashCleanupScheduler.apply(app(), enabled) },
+            )
+        }
         initializer {
             SyncViewModel(
                 repo = app().container.repository,

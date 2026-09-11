@@ -53,6 +53,10 @@ interface TagDao {
 
     @Query("SELECT COUNT(*) FROM tags")
     suspend fun count(): Int
+
+    /** 概览页要实时数字，别用 suspend 版（否则删完标签回来看还是旧值）。 */
+    @Query("SELECT COUNT(*) FROM tags")
+    fun observeCount(): Flow<Int>
 }
 
 @Dao
@@ -91,6 +95,9 @@ interface GroupDao {
 
     @Query("SELECT COUNT(*) FROM groups")
     suspend fun count(): Int
+
+    @Query("SELECT COUNT(*) FROM groups")
+    fun observeCount(): Flow<Int>
 }
 
 @Dao
@@ -107,6 +114,9 @@ interface ChangeLogDao {
 
     @Query("SELECT COUNT(*) FROM change_log")
     suspend fun count(): Int
+
+    @Query("SELECT COUNT(*) FROM change_log")
+    fun observeCount(): Flow<Int>
 
     @Query("DELETE FROM change_log WHERE at < :before")
     suspend fun prune(before: Long)

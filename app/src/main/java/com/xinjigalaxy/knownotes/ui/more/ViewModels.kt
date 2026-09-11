@@ -6,24 +6,24 @@ import androidx.lifecycle.viewModelScope
 import com.xinjigalaxy.knownotes.data.export.ExportFormat
 import com.xinjigalaxy.knownotes.data.export.Exporter
 import com.xinjigalaxy.knownotes.data.repo.NoteRepository
-import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.flatMapLatest
-import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
-@OptIn(ExperimentalCoroutinesApi::class)
 class MoreViewModel(private val repo: NoteRepository) : ViewModel() {
 
-    private val refreshTick = MutableStateFlow(0)
-
-    val stats: StateFlow<NoteRepository.Stats?> = refreshTick
-        .flatMapLatest { flow { emit(repo.stats()) } }
+    /**
+     * 概览统计：**实时流**，不是一次性查询。
+     *
+     * v1.4.0 反馈的 bug 就在这：原来是 refreshTick + 一次性 `stats()`，而「更多」页从来不会
+     * 主动 refresh，于是进回收站子页面删完东西回来，「N 条已删除笔记」还是旧数字。
+     * 改成 observeStats() 之后，任何写入都会自动重算 —— 连「变更日志」条数也是活的。
+     */
+    val stats: StateFlow<NoteRepository.Stats?> = repo.observeStats()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000L), null)
 
     val deviceId: String = repo.deviceId
@@ -32,11 +32,6 @@ class MoreViewModel(private val repo: NoteRepository) : ViewModel() {
     val searchEngineProbeError: String? = repo.searchEngineProbeError
     val sqliteVersion: String = repo.sqliteVersion
     val searchEngineDecision: String = repo.searchEngineDecision
-
-    /** 软删除清理搬到回收站页了，这里只保留统计刷新入口。 */
-    fun refresh() {
-        refreshTick.value += 1
-    }
 }
 
 class ExportViewModel(

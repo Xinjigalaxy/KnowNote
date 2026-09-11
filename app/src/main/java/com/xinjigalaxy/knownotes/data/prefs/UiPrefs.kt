@@ -1,6 +1,7 @@
 package com.xinjigalaxy.knownotes.data.prefs
 
 import android.content.Context
+import com.xinjigalaxy.knownotes.data.settings.ThemeMode
 import com.xinjigalaxy.knownotes.data.sync.SYNC_DEFAULT_PORT
 
 /**
@@ -75,6 +76,44 @@ class UiPrefs(context: Context) {
         prefs.edit().putBoolean(KEY_HOST_AUTOSTART, value).apply()
     }
 
+    // ---------- 外观与回收站清理（设置页，v1.4.0） ----------
+
+    /** 主题模式：SYSTEM / LIGHT / DARK（空串表示还没设过）。 */
+    fun themeMode(): String = prefs.getString(KEY_THEME_MODE, ThemeMode.SYSTEM.name).orEmpty()
+
+    fun saveThemeMode(name: String) {
+        prefs.edit().putString(KEY_THEME_MODE, name).apply()
+    }
+
+    /** 主题色是否用 Android 12+ 的动态取色（默认关：保住初音绿品牌色）。 */
+    fun dynamicColor(): Boolean = prefs.getBoolean(KEY_DYNAMIC_COLOR, false)
+
+    fun saveDynamicColor(value: Boolean) {
+        prefs.edit().putBoolean(KEY_DYNAMIC_COLOR, value).apply()
+    }
+
+    fun autoPurgeTrash(): Boolean = prefs.getBoolean(KEY_AUTO_PURGE, false)
+
+    fun saveAutoPurgeTrash(value: Boolean) {
+        prefs.edit().putBoolean(KEY_AUTO_PURGE, value).apply()
+    }
+
+    /** 回收站保留天数（超过就被定时清理彻底删掉）。 */
+    fun trashRetentionDays(): Int = prefs.getInt(KEY_PURGE_DAYS, DEFAULT_RETENTION_DAYS)
+
+    fun saveTrashRetentionDays(value: Int) {
+        prefs.edit().putInt(KEY_PURGE_DAYS, value).apply()
+    }
+
+    /** 上次清理回收站的时间与条数，设置页展示用。 */
+    fun lastTrashPurgeAt(): Long = prefs.getLong(KEY_LAST_PURGE_AT, 0L)
+
+    fun lastTrashPurgeCount(): Int = prefs.getInt(KEY_LAST_PURGE_COUNT, 0)
+
+    fun saveLastTrashPurge(at: Long, count: Int) {
+        prefs.edit().putLong(KEY_LAST_PURGE_AT, at).putInt(KEY_LAST_PURGE_COUNT, count).apply()
+    }
+
     private companion object {
         const val KEY_GROUP_FILTER = "filter_group"
         const val KEY_TAG_FILTER = "filter_tags"
@@ -83,5 +122,12 @@ class UiPrefs(context: Context) {
         const val KEY_PEER = "sync_peer"
         const val KEY_HOST_PORT = "sync_host_port"
         const val KEY_HOST_AUTOSTART = "sync_host_autostart"
+        const val KEY_THEME_MODE = "theme_mode"
+        const val KEY_DYNAMIC_COLOR = "dynamic_color"
+        const val KEY_AUTO_PURGE = "trash_auto_purge"
+        const val KEY_PURGE_DAYS = "trash_retention_days"
+        const val KEY_LAST_PURGE_AT = "trash_last_purge_at"
+        const val KEY_LAST_PURGE_COUNT = "trash_last_purge_count"
+        const val DEFAULT_RETENTION_DAYS = 30
     }
 }
