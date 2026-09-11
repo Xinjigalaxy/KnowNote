@@ -30,12 +30,12 @@ class UiPrefs(context: Context) {
         prefs.edit().putStringSet(KEY_TAG_FILTER, ids.map { it.toString() }.toSet()).apply()
     }
 
-    /** 编辑页是否默认进预览模式：写代码知识的笔记大多希望直接看渲染效果。 */
-    var preferMarkdownPreview: Boolean
-        get() = prefs.getBoolean(KEY_PREVIEW, false)
-        set(value) {
-            prefs.edit().putBoolean(KEY_PREVIEW, value).apply()
-        }
+    /** 列表展示形态：LIST / STAGGERED（存枚举名，便于以后加形态）。 */
+    fun noteLayoutOrNull(): String? = prefs.getString(KEY_LAYOUT, null)
+
+    fun saveNoteLayout(name: String) {
+        prefs.edit().putString(KEY_LAYOUT, name).apply()
+    }
 
     fun clearFilters() {
         prefs.edit().remove(KEY_GROUP_FILTER).remove(KEY_TAG_FILTER).apply()
@@ -44,6 +44,6 @@ class UiPrefs(context: Context) {
     private companion object {
         const val KEY_GROUP_FILTER = "filter_group"
         const val KEY_TAG_FILTER = "filter_tags"
-        const val KEY_PREVIEW = "prefer_markdown_preview"
+        const val KEY_LAYOUT = "note_layout"
     }
 }

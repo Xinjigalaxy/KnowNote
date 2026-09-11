@@ -46,9 +46,9 @@ object Routes {
     const val SYNC = "sync"
     const val TRASH = "trash"
 
-    /** 0 表示新建。 */
-    const val EDIT_PATTERN = "edit?noteId={noteId}"
-    fun edit(noteId: Long?): String = "edit?noteId=${noteId ?: 0L}"
+    /** 0 表示新建；preview 决定进来是「查看」还是「编辑」。 */
+    const val EDIT_PATTERN = "edit?noteId={noteId}&preview={preview}"
+    fun edit(noteId: Long?, preview: Boolean): String = "edit?noteId=${noteId ?: 0L}&preview=$preview"
 }
 
 private data class Tab(val route: String, val label: String, val icon: ImageVector, val selectedIcon: ImageVector)
@@ -108,8 +108,8 @@ fun KnowNoteRoot() {
         ) {
             composable(Routes.NOTES) {
                 NoteListScreen(
-                    onOpenNote = { id -> navController.navigate(Routes.edit(id)) },
-                    onCreateNote = { navController.navigate(Routes.edit(null)) },
+                    onOpenNote = { id, preview -> navController.navigate(Routes.edit(id, preview)) },
+                    onCreateNote = { navController.navigate(Routes.edit(null, false)) },
                 )
             }
             composable(Routes.GROUPS) { GroupScreen() }
@@ -127,12 +127,18 @@ fun KnowNoteRoot() {
                     navArgument("noteId") {
                         type = NavType.LongType
                         defaultValue = 0L
-                    }
+                    },
+                    navArgument("preview") {
+                        type = NavType.BoolType
+                        defaultValue = false
+                    },
                 ),
             ) { entry ->
                 val rawId = entry.arguments?.getLong("noteId") ?: 0L
+                val openInPreview = entry.arguments?.getBoolean("preview") ?: false
                 NoteEditScreen(
                     noteId = rawId.takeIf { it > 0L },
+                    openInPreview = openInPreview,
                     onDone = { navController.popBackStack() },
                 )
             }

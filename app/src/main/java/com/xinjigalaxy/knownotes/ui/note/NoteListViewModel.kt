@@ -29,6 +29,18 @@ import kotlinx.coroutines.launch
 const val GROUP_ALL = -1L
 const val GROUP_NONE = -2L
 
+/** 列表展示形态，可在界面上循环切换。 */
+enum class NoteLayout {
+    LIST,
+    STAGGERED,
+    ;
+
+    fun next(): NoteLayout = if (this == LIST) STAGGERED else LIST
+}
+
+private fun String?.toNoteLayout(): NoteLayout =
+    NoteLayout.entries.firstOrNull { it.name.equals(this, ignoreCase = true) } ?: NoteLayout.LIST
+
 data class NoteListUiState(
     val query: String = "",
     val highlightTerms: List<String> = emptyList(),
@@ -46,6 +58,8 @@ data class NoteListUiState(
     val searchHistory: List<SearchHistory> = emptyList(),
     /** 搜索框聚焦且内容为空时，才把历史铺开。 */
     val showSearchHistory: Boolean = false,
+    /** 列表 / 瀑布流 */
+    val layout: NoteLayout = NoteLayout.LIST,
 )
 
 @OptIn(FlowPreview::class, ExperimentalCoroutinesApi::class)
@@ -58,6 +72,7 @@ class NoteListViewModel(
     private val selectedTagIds = MutableStateFlow(prefs.tagFilterOrNull() ?: emptySet())
     private val groupFilter = MutableStateFlow(prefs.groupFilterOrNull() ?: GROUP_ALL)
     private val searchFocused = MutableStateFlow(false)
+    private val layout = MutableStateFlow(prefs.noteLayoutOrNull().toNoteLayout())
 
     /** 输入即搜，防抖 300ms（需求文档 3.4）。 */
     private val debouncedQuery = query
@@ -80,8 +95,9 @@ class NoteListViewModel(
         },
         repo.observeRecentSearches(),
         searchFocused,
-    ) { base, history, focused ->
-        base.copy(history = history, focused = focused)
+        layout,
+    ) { base, history, focused, currentLayout ->
+        base.copy(history = history, focused = focused, layout = currentLayout)
     }
 
     val uiState: StateFlow<NoteListUiState> = combine(
@@ -122,6 +138,7 @@ class NoteListViewModel(
             searchEngineIsFullText = repo.searchEngineIsFullText,
             searchHistory = filter.history,
             showSearchHistory = filter.focused && filter.query.isBlank() && filter.history.isNotEmpty(),
+            layout = filter.layout,
         )
     }.stateIn(
         scope = viewModelScope,
@@ -179,6 +196,12 @@ class NoteListViewModel(
         prefs.clearFilters()
     }
 
+    /** 列表 ↔ 瀑布流循环切换，并记住选择。 */
+    fun toggleLayout() {
+        layout.value = layout.value.next()
+        prefs.saveNoteLayout(layout.value.name)
+    }
+
     fun deleteNote(noteId: Long) {
         viewModelScope.launch { repo.deleteNote(noteId) }
     }
@@ -195,5 +218,6 @@ class NoteListViewModel(
         val debounced: String,
         val history: List<SearchHistory> = emptyList(),
         val focused: Boolean = false,
+        val layout: NoteLayout = NoteLayout.LIST,
     )
 }

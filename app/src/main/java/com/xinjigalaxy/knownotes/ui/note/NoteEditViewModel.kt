@@ -4,7 +4,6 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.xinjigalaxy.knownotes.data.model.Group
 import com.xinjigalaxy.knownotes.data.model.Tag
-import com.xinjigalaxy.knownotes.data.prefs.UiPrefs
 import com.xinjigalaxy.knownotes.data.repo.NoteRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -14,10 +13,7 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
-class NoteEditViewModel(
-    private val repo: NoteRepository,
-    private val prefs: UiPrefs,
-) : ViewModel() {
+class NoteEditViewModel(private val repo: NoteRepository) : ViewModel() {
 
     data class State(
         val noteId: Long? = null,
@@ -36,7 +32,7 @@ class NoteEditViewModel(
         val isNew: Boolean get() = noteId == null
     }
 
-    private val _state = MutableStateFlow(State(preview = prefs.preferMarkdownPreview))
+    private val _state = MutableStateFlow(State())
     val state: StateFlow<State> = _state.asStateFlow()
 
     val allTags: StateFlow<List<Tag>> = repo.observeTags()
@@ -45,11 +41,14 @@ class NoteEditViewModel(
     val groups: StateFlow<List<Group>> = repo.observeGroups()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000L), emptyList())
 
-    fun load(noteId: Long?) {
+    /**
+     * @param openInPreview 列表里「点击=查看、长按=编辑」由调用方决定初始模式
+     */
+    fun load(noteId: Long?, openInPreview: Boolean) {
         if (_state.value.loaded) return
         viewModelScope.launch {
             if (noteId == null || noteId == 0L) {
-                _state.value = State(loaded = true, preview = prefs.preferMarkdownPreview)
+                _state.value = State(loaded = true, preview = openInPreview)
                 return@launch
             }
             val loaded = repo.note(noteId)
@@ -65,16 +64,15 @@ class NoteEditViewModel(
                     createdAt = loaded.note.createdAt,
                     updatedAt = loaded.note.updatedAt,
                     loaded = true,
-                    preview = prefs.preferMarkdownPreview,
+                    preview = openInPreview,
                 )
             }
         }
     }
 
-    /** 编辑 / 预览切换，并记住偏好（下次打开同样的模式）。 */
+    /** 编辑 / 预览切换。 */
     fun setPreview(value: Boolean) {
         _state.update { it.copy(preview = value) }
-        prefs.preferMarkdownPreview = value
     }
 
     fun setTitle(value: String) = _state.update { it.copy(title = value, dirty = true) }
@@ -105,15 +103,20 @@ class NoteEditViewModel(
         }
     }
 
-    /** 保存并回调结果 id；空白笔记（标题与正文都空）直接跳过。 */
-    fun save(onSaved: (Long?) -> Unit) {
-        viewModelScope.launch { onSaved(persist()) }
+    /**
+     * 保存并回调结果 id。
+     *
+     * @param pendingTag 输入框里**还没点确认**的标签文本。必须一起入库：
+     *        否则用户"输完标签直接点保存"这段文字就白输了（v1.1.0 的实际 bug）。
+     */
+    fun save(pendingTag: String = "", onSaved: (Long?) -> Unit) {
+        viewModelScope.launch { onSaved(persist(pendingTag)) }
     }
 
     /** 返回时兜底保存，避免误退丢内容。 */
-    fun saveOnExit(onFinished: () -> Unit) {
+    fun saveOnExit(pendingTag: String = "", onFinished: () -> Unit) {
         viewModelScope.launch {
-            persist()
+            persist(pendingTag)
             onFinished()
         }
     }
@@ -125,22 +128,29 @@ class NoteEditViewModel(
         }
     }
 
-    private suspend fun persist(): Long? {
+    private suspend fun persist(pendingTag: String = ""): Long? {
         val current = _state.value
-        if (current.title.isBlank() && current.content.isBlank()) return current.noteId
+        val tags = (current.tags + pendingTag.trim())
+            .map { it.trim() }
+            .filter { it.isNotEmpty() }
+            .distinct()
+        if (current.title.isBlank() && current.content.isBlank() && tags.isEmpty()) {
+            return current.noteId
+        }
         return runCatching {
             repo.saveNote(
                 noteId = current.noteId,
                 title = current.title,
                 content = current.content,
                 groupId = current.groupId,
-                tagNames = current.tags,
+                tagNames = tags,
             )
         }.onSuccess { newId ->
             _state.update {
                 it.copy(
                     noteId = newId,
                     title = it.title.trim(),
+                    tags = tags,
                     updatedAt = System.currentTimeMillis(),
                     dirty = false,
                 )
