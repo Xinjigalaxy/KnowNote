@@ -27,6 +27,11 @@ interface NoteDao {
     @Query("SELECT * FROM notes WHERE is_purged = 0 ORDER BY updated_at DESC")
     suspend fun allWithTagsOnce(): List<NoteWithTags>
 
+    /** 在线（未删除、未立墓碑）笔记 + 标签，检索兜底路径用。 */
+    @Transaction
+    @Query("SELECT * FROM notes WHERE is_deleted = 0 AND is_purged = 0 ORDER BY updated_at DESC")
+    suspend fun allOnlineWithTagsOnce(): List<NoteWithTags>
+
     @Query("SELECT * FROM notes WHERE is_purged = 0 ORDER BY updated_at DESC")
     suspend fun allOnce(): List<Note>
 
@@ -104,16 +109,6 @@ interface NoteDao {
             "WHERE nt.note_id = :noteId ORDER BY t.name"
     )
     suspend fun tagNamesOf(noteId: Long): List<String>
-
-    /** FTS 不可用时的兜底：LIKE 扫描，且必须覆盖标签（否则标签筛选语义会悄悄丢失）。 */
-    @Query(
-        "SELECT * FROM notes WHERE is_deleted = 0 AND (" +
-            "title LIKE '%' || :q || '%' OR content LIKE '%' || :q || '%' OR " +
-            "id IN (SELECT nt.note_id FROM note_tags nt INNER JOIN tags t ON t.id = nt.tag_id " +
-            "WHERE t.name LIKE '%' || :q || '%')) " +
-            "ORDER BY updated_at DESC LIMIT :limit"
-    )
-    suspend fun likeSearch(q: String, limit: Int): List<Note>
 
     @Query(
         "SELECT DISTINCT n.* FROM notes n INNER JOIN note_tags nt ON nt.note_id = n.id " +

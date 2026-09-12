@@ -1,6 +1,8 @@
 package com.xinjigalaxy.knownotes.data.prefs
 
 import android.content.Context
+import com.xinjigalaxy.knownotes.data.settings.FontScale
+import com.xinjigalaxy.knownotes.data.settings.TextColorOption
 import com.xinjigalaxy.knownotes.data.settings.ThemeMode
 import com.xinjigalaxy.knownotes.data.sync.SYNC_DEFAULT_PORT
 
@@ -121,6 +123,26 @@ class UiPrefs(context: Context) {
         prefs.edit().putString(KEY_LANGUAGE, tag).apply()
     }
 
+    /** 检索范围（title/content/tags 的组合）；没设置过返回 null 表示"默认全选"。 */
+    fun searchScopesOrNull(): Set<String>? = prefs.getStringSet(KEY_SEARCH_SCOPE, null)
+
+    fun saveSearchScopes(names: Set<String>) {
+        prefs.edit().putStringSet(KEY_SEARCH_SCOPE, names).apply()
+    }
+
+    /** 阅读设置：字号与文字颜色。 */
+    fun fontScale(): String = prefs.getString(KEY_FONT_SCALE, FontScale.NORMAL.name).orEmpty()
+
+    fun saveFontScale(name: String) {
+        prefs.edit().putString(KEY_FONT_SCALE, name).apply()
+    }
+
+    fun textColor(): String = prefs.getString(KEY_TEXT_COLOR, TextColorOption.THEME.name).orEmpty()
+
+    fun saveTextColor(name: String) {
+        prefs.edit().putString(KEY_TEXT_COLOR, name).apply()
+    }
+
     private companion object {
         const val KEY_GROUP_FILTER = "filter_group"
         const val KEY_TAG_FILTER = "filter_tags"
@@ -136,6 +158,9 @@ class UiPrefs(context: Context) {
         const val KEY_LAST_PURGE_AT = "trash_last_purge_at"
         const val KEY_LAST_PURGE_COUNT = "trash_last_purge_count"
         const val KEY_LANGUAGE = "app_language"
+        const val KEY_SEARCH_SCOPE = "search_scope"
+        const val KEY_FONT_SCALE = "font_scale"
+        const val KEY_TEXT_COLOR = "text_color"
         const val DEFAULT_RETENTION_DAYS = 30
     }
 }

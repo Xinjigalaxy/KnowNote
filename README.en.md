@@ -19,6 +19,9 @@ Notes + tags + groups, full-text search over the note body, Markdown preview, a 
 ## What it does
 
 - **Notes with real search.** Chinese substring search that actually works (see *The FTS5 story* below), tags folded into the index, hit highlighting, search history.
+- **Search you can aim.** Limit a query to title, body or tags (all three by default); the candidate set widens automatically when you narrow, so filtering never hides results.
+- **Case-insensitive everywhere.** Index and query both fold with `lowercase(Locale.ROOT)`, so `Android`, `android` and `GRADLE` hit the same note; search history merges duplicates case-insensitively too.
+- **Reading display.** Five text sizes (the whole Typography scales proportionally, so the heading/body hierarchy survives) and seven text colours with separate light and dark values.
 - **Three ways to organise.** Tags, groups, and combined filtering; tapping a tag or group opens a dedicated page with the same card layout and list ↔ staggered-grid toggle.
 - **Never lose a note.** Long-press deletes, everything lands in Trash first, and cleanup is opt-in: WorkManager runs once a day, keeps 7/30/90 days, and reports back what it removed.
 - **Reads like notes should.** Tap = preview (Markdown rendered), long-press = edit. Only saves when you actually changed something.
@@ -133,6 +136,7 @@ service in this version, so the process can be reclaimed by the system.
 | v1.3.0 | LAN sync: host + clients, hand-written HTTP server, incremental changes, deterministic conflict resolution, shared-key auth; database migration 2→3 |
 | v1.4.0 | Settings page (theme mode, dynamic colour, scheduled trash cleanup); overview counters became Room Flows so they update live |
 | v1.5.0 | Four UI languages with per-app locale support; renamed to **KnowNote / 碎片笔记**; adaptive icon with a proper monochrome layer; internal diagnostics unified to English. Also fixed a bug only visible on a device: Kotlin templates in *translations* were written into resources verbatim, so the Japanese UI showed `$days 日` |
+| v1.6.0 | Adjustable reading display (five sizes, seven text colours) and a search you can aim (title / body / tags, all by default; case-insensitive everywhere). The text colour has to be applied to **theme colour roles**, not `LocalContentColor` — 60+ Texts set an explicit colour, so only roles take effect |
 
 ## Roadmap
 

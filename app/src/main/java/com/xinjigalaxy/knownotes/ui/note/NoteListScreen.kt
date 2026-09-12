@@ -75,6 +75,7 @@ import com.xinjigalaxy.knownotes.R
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.xinjigalaxy.knownotes.data.model.NoteWithTags
+import com.xinjigalaxy.knownotes.data.search.SearchScope
 import com.xinjigalaxy.knownotes.ui.AppViewModelProvider
 import com.xinjigalaxy.knownotes.ui.NoteLayout
 import com.xinjigalaxy.knownotes.ui.components.EmptyHint
@@ -155,6 +156,35 @@ fun NoteListScreen(
                     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
                     keyboardActions = KeyboardActions(onSearch = { viewModel.commitSearch() }),
                 )
+
+                // 检索范围（标题 / 正文 / 标签）：只在开始检索后出现，默认全选
+                if (state.query.isNotEmpty()) {
+                    LazyRow(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 12.dp, vertical = 2.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        contentPadding = PaddingValues(horizontal = 4.dp),
+                    ) {
+                        item {
+                            Text(
+                                text = stringResource(R.string.search_scope),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.outline,
+                            )
+                        }
+                        SearchScope.entries.forEach { scope ->
+                            item(key = scope.name) {
+                                FilterChip(
+                                    selected = scope in state.searchScopes,
+                                    onClick = { viewModel.toggleSearchScope(scope) },
+                                    label = { Text(stringResource(scope.labelRes)) },
+                                )
+                            }
+                        }
+                    }
+                }
 
                 if (state.showSearchHistory) {
                     SearchHistoryPanel(

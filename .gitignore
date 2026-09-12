@@ -38,3 +38,6 @@ demo-shots/
 #   gradle/wrapper/gradle-wrapper.properties
 #   app/schemas/**                      —— Room 导出的 schema，迁移要靠它比对
 #   docs/screenshots/**                 —— README 引用的界面截图（已脱敏）
+
+# 本机验证用的原始截图（只提交 docs/screenshots/ 里的脱敏图）
+shots*/

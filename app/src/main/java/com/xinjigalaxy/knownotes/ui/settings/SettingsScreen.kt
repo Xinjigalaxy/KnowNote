@@ -28,7 +28,17 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Switch
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
@@ -44,6 +54,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.xinjigalaxy.knownotes.data.settings.AppLanguage
 import com.xinjigalaxy.knownotes.data.settings.AppLocales
+import com.xinjigalaxy.knownotes.data.settings.FontScale
+import com.xinjigalaxy.knownotes.data.settings.TextColorOption
 import com.xinjigalaxy.knownotes.data.settings.ThemeMode
 import com.xinjigalaxy.knownotes.ui.AppViewModelProvider
 import com.xinjigalaxy.knownotes.ui.components.formatTime
@@ -150,6 +162,76 @@ fun SettingsScreen(
                             onCheckedChange = viewModel::setDynamicColor,
                             enabled = dynamicColorSupported,
                         )
+                    }
+                }
+            }
+
+            item {
+                SectionCard(title = stringResource(R.string.reading_section)) {
+                    Text(
+                        text = stringResource(R.string.font_scale),
+                        style = MaterialTheme.typography.labelLarge,
+                    )
+                    FlowRow(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp),
+                    ) {
+                        FontScale.entries.forEach { scale ->
+                            FilterChip(
+                                selected = state.fontScale == scale,
+                                onClick = { viewModel.setFontScale(scale) },
+                                label = { Text(stringResource(scale.labelRes)) },
+                            )
+                        }
+                    }
+                    // 就地预览：不用跳出去看笔记，改一下当场就能判断合不合适
+                    Surface(
+                        color = MaterialTheme.colorScheme.surfaceVariant,
+                        shape = MaterialTheme.shapes.medium,
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text(
+                            text = stringResource(R.string.font_scale_preview),
+                            style = MaterialTheme.typography.bodyMedium,
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                        )
+                    }
+
+                    Text(
+                        text = stringResource(R.string.text_color),
+                        style = MaterialTheme.typography.labelLarge,
+                    )
+                    FlowRow(
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp),
+                    ) {
+                        val dark = isSystemInDarkTheme()
+                        TextColorOption.entries.forEach { option ->
+                            val selected = state.textColor == option
+                            val swatch = option.colorFor(dark)?.let { Color(it) }
+                                ?: MaterialTheme.colorScheme.onSurface
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(36.dp)
+                                        .clip(CircleShape)
+                                        .background(swatch)
+                                        .border(
+                                            width = if (selected) 3.dp else 1.dp,
+                                            color = if (selected) MaterialTheme.colorScheme.primary
+                                            else MaterialTheme.colorScheme.outlineVariant,
+                                            shape = CircleShape,
+                                        )
+                                        .clickable { viewModel.setTextColor(option) },
+                                )
+                                Text(
+                                    text = stringResource(option.labelRes),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = if (selected) MaterialTheme.colorScheme.primary
+                                    else MaterialTheme.colorScheme.outline,
+                                )
+                            }
+                        }
                     }
                 }
             }
