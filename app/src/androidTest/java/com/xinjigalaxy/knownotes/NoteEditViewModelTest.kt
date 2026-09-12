@@ -5,6 +5,7 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.xinjigalaxy.knownotes.data.db.AppDatabase
 import com.xinjigalaxy.knownotes.data.db.FtsSchemaCallback
+import com.xinjigalaxy.knownotes.data.prefs.UiPrefs
 import com.xinjigalaxy.knownotes.data.repo.NoteRepository
 import com.xinjigalaxy.knownotes.ui.note.NoteEditViewModel
 import kotlinx.coroutines.runBlocking
@@ -29,6 +30,11 @@ class NoteEditViewModelTest {
 
     private lateinit var db: AppDatabase
     private lateinit var repo: NoteRepository
+
+    /** 编辑页现在也要读阅读页的显示偏好（v1.7.0），惰性取上下文，setUp 不必改。 */
+    private val prefs: UiPrefs by lazy {
+        UiPrefs(InstrumentationRegistry.getInstrumentation().targetContext)
+    }
 
     @Before
     fun setUp() {
@@ -60,7 +66,7 @@ class NoteEditViewModelTest {
      */
     @Test
     fun pendingTagInInputFieldIsSavedTogetherWithTheNote() {
-        val vm = NoteEditViewModel(repo)
+        val vm = NoteEditViewModel(repo, prefs)
         vm.load(null, openInPreview = false)
         awaitLoaded(vm)
 
@@ -81,7 +87,7 @@ class NoteEditViewModelTest {
     /** 已经点过 + 号的标签 + 输入框里新打的标签，两者都要保留。 */
     @Test
     fun confirmedAndPendingTagsAreBothKept() {
-        val vm = NoteEditViewModel(repo)
+        val vm = NoteEditViewModel(repo, prefs)
         vm.load(null, openInPreview = false)
         awaitLoaded(vm)
 
@@ -100,7 +106,7 @@ class NoteEditViewModelTest {
     /** 空白笔记（无标题无正文无标签）不该写库。 */
     @Test
     fun blankNoteIsNotPersisted() {
-        val vm = NoteEditViewModel(repo)
+        val vm = NoteEditViewModel(repo, prefs)
         vm.load(null, openInPreview = false)
         awaitLoaded(vm)
 
@@ -118,7 +124,7 @@ class NoteEditViewModelTest {
             repo.saveNote(null, "原标题", "原正文", null, listOf("旧标签"))
         }
 
-        val vm = NoteEditViewModel(repo)
+        val vm = NoteEditViewModel(repo, prefs)
         vm.load(noteId, openInPreview = false)
         awaitLoaded(vm)
         assertEquals(listOf("旧标签"), vm.state.value.tags)
@@ -147,7 +153,7 @@ class NoteEditViewModelTest {
         val before = runBlocking { db.noteDao().byId(noteId) }!!.updatedAt
 
         Thread.sleep(1_100) // 只要发生写库，updated_at 必然比 before 大
-        val vm = NoteEditViewModel(repo)
+        val vm = NoteEditViewModel(repo, prefs)
         vm.load(noteId, openInPreview = true)
         awaitLoaded(vm)
 
@@ -165,7 +171,7 @@ class NoteEditViewModelTest {
     fun exitingAfterEditingStillSaves() {
         val noteId = runBlocking { repo.saveNote(null, "原标题", "原正文", null, emptyList()) }
 
-        val vm = NoteEditViewModel(repo)
+        val vm = NoteEditViewModel(repo, prefs)
         vm.load(noteId, openInPreview = false)
         awaitLoaded(vm)
         vm.setTitle("改过的标题")
@@ -182,7 +188,7 @@ class NoteEditViewModelTest {
     fun exitingWithOnlyAPendingTagStillSaves() {
         val noteId = runBlocking { repo.saveNote(null, "标题", "正文", null, emptyList()) }
 
-        val vm = NoteEditViewModel(repo)
+        val vm = NoteEditViewModel(repo, prefs)
         vm.load(noteId, openInPreview = false)
         awaitLoaded(vm)
 

@@ -248,4 +248,21 @@
     <string name="text_color_forest">墨綠</string>
     <string name="text_color_navy">深藍</string>
     <string name="text_color_wine">酒紅</string>
+    <string name="read_mode_md">MD 模式</string>
+    <string name="read_mode_text">文字模式</string>
+    <string name="read_font_value">字級 %1$d sp</string>
+    <string name="format_section">格式</string>
+    <string name="format_select_hint">選取文字後再點下方按鈕</string>
+    <string name="format_bold">粗體</string>
+    <string name="format_italic">斜體</string>
+    <string name="size_small">小</string>
+    <string name="size_large">大</string>
+    <string name="size_xlarge">特大</string>
+    <string name="color_red">紅</string>
+    <string name="color_yellow">黃</string>
+    <string name="color_green">綠</string>
+    <string name="color_cyan">青</string>
+    <string name="color_blue">藍</string>
+    <string name="color_purple">紫</string>
+    <string name="read_options">閱讀顯示</string>
 </resources>

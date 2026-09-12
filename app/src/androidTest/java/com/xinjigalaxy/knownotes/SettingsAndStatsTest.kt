@@ -9,6 +9,8 @@ import com.xinjigalaxy.knownotes.data.prefs.UiPrefs
 import com.xinjigalaxy.knownotes.data.repo.NoteRepository
 import com.xinjigalaxy.knownotes.data.settings.AppSettings
 import com.xinjigalaxy.knownotes.data.settings.FontScale
+import com.xinjigalaxy.knownotes.data.settings.READ_FONT_DEFAULT
+import com.xinjigalaxy.knownotes.data.settings.ReadMode
 import com.xinjigalaxy.knownotes.data.settings.TextColorOption
 import com.xinjigalaxy.knownotes.data.settings.ThemeMode
 import com.xinjigalaxy.knownotes.data.search.SearchScope
@@ -173,6 +175,16 @@ class SettingsAndStatsTest {
             setOf(SearchScope.TAGS),
             SearchScope.fromPrefs(UiPrefs(context).searchScopesOrNull()),
         )
+
+        // 阅读页设置（v1.7.0）：字号倍率 + 展示方式，只作用于阅读页
+        prefs.saveReadFontScale(1.4f)
+        prefs.saveReadMode(ReadMode.TEXT.prefName)
+        val reopened = UiPrefs(context)
+        assertEquals(1.4f, reopened.readFontScale(), 0.001f)
+        assertEquals(ReadMode.TEXT, ReadMode.fromName(reopened.readModeOrNull()))
+        assertEquals("没设置过时默认渲染 Markdown", ReadMode.MD, ReadMode.fromName(null))
+        prefs.saveReadFontScale(READ_FONT_DEFAULT)
+        prefs.saveReadMode(ReadMode.MD.prefName)
 
         // 复原，别把应用偏好留在测试改过的状态
         settings.setThemeMode(ThemeMode.SYSTEM)

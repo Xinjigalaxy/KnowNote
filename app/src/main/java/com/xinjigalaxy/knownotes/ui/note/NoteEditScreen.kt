@@ -1,7 +1,11 @@
 package com.xinjigalaxy.knownotes.ui.note
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
@@ -13,7 +17,9 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
@@ -25,6 +31,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.outlined.DeleteOutline
 import androidx.compose.material.icons.outlined.Edit
+import androidx.compose.material.icons.outlined.FormatSize
 import androidx.compose.material.icons.outlined.Visibility
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.AssistChip
@@ -35,7 +42,9 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -48,14 +57,25 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.text.font.FontStyle
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import com.xinjigalaxy.knownotes.R
+import com.xinjigalaxy.knownotes.data.settings.READ_FONT_MAX
+import com.xinjigalaxy.knownotes.data.settings.READ_FONT_MIN
+import com.xinjigalaxy.knownotes.data.settings.ReadMode
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.xinjigalaxy.knownotes.ui.AppViewModelProvider
 import com.xinjigalaxy.knownotes.ui.components.formatFullTime
+import com.xinjigalaxy.knownotes.ui.markdown.MarkupColor
 import com.xinjigalaxy.knownotes.ui.markdown.MarkdownText
+import com.xinjigalaxy.knownotes.ui.markdown.MarkupSize
+import kotlin.math.roundToInt
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
@@ -76,6 +96,7 @@ fun NoteEditScreen(
     var newGroupName by remember { mutableStateOf("") }
     var showNewGroup by remember { mutableStateOf(false) }
     var confirmDelete by remember { mutableStateOf(false) }
+    var showReadingMenu by remember { mutableStateOf(false) }
 
     // 返回键 = 保存后退出，避免误退丢内容（输入框里没点确认的标签也一起带上）
     BackHandler(enabled = true) { viewModel.saveOnExit(tagInput, onDone) }
@@ -90,6 +111,22 @@ fun NoteEditScreen(
                 },
                 title = { Text(if (state.isNew) stringResource(R.string.new_note) else stringResource(R.string.edit_note)) },
                 actions = {
+                    // 阅读显示设置（MD / 原文、字号）：收进二级菜单，
+                    // 之前放在底栏会一直压着正文，影响阅读。
+                    Box {
+                        IconButton(onClick = { showReadingMenu = true }) {
+                            Icon(
+                                imageVector = Icons.Outlined.FormatSize,
+                                contentDescription = stringResource(R.string.read_options),
+                            )
+                        }
+                        DropdownMenu(
+                            expanded = showReadingMenu,
+                            onDismissRequest = { showReadingMenu = false },
+                        ) {
+                            ReadingMenuContent(state = state, viewModel = viewModel)
+                        }
+                    }
                     IconButton(onClick = { viewModel.setPreview(!state.preview) }) {
                         Icon(
                             imageVector = if (state.preview) Icons.Outlined.Edit else Icons.Outlined.Visibility,
@@ -136,14 +173,16 @@ fun NoteEditScreen(
             )
 
             OutlinedTextField(
-                value = state.content,
-                onValueChange = viewModel::setContent,
+                value = state.contentField,
+                onValueChange = viewModel::setContentField,
                 modifier = Modifier
                     .fillMaxWidth()
                     .heightIn(min = 200.dp),
                 label = { Text(stringResource(R.string.body)) },
                 placeholder = { Text(stringResource(R.string.jot_fragmented_notes_anytime_code_snippets_paste)) },
             )
+
+            FormatToolbar(state = state, viewModel = viewModel)
 
             HorizontalDivider()
 
@@ -295,8 +334,16 @@ private fun NotePreviewBody(state: NoteEditViewModel.State, modifier: Modifier =
             .padding(horizontal = 20.dp, vertical = 16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
+        val scale = state.readFontScale
         if (state.title.isNotBlank()) {
-            Text(text = state.title, style = MaterialTheme.typography.headlineSmall)
+            val titleStyle = MaterialTheme.typography.headlineSmall
+            Text(
+                text = state.title,
+                style = titleStyle.copy(
+                    fontSize = titleStyle.fontSize * scale,
+                    lineHeight = titleStyle.lineHeight * scale,
+                ),
+            )
         }
         if (state.content.isBlank()) {
             Text(
@@ -305,7 +352,19 @@ private fun NotePreviewBody(state: NoteEditViewModel.State, modifier: Modifier =
                 color = MaterialTheme.colorScheme.outline,
             )
         } else {
-            MarkdownText(text = state.content, modifier = Modifier.fillMaxWidth())
+            when (state.readMode) {
+                ReadMode.MD -> MarkdownText(
+                    text = state.content,
+                    modifier = Modifier.fillMaxWidth(),
+                    fontScale = state.readFontScale,
+                )
+                // 文本模式：连自定义标记本身一起原样显示，方便手动改
+                ReadMode.TEXT -> PlainNoteText(
+                    text = state.content,
+                    scale = state.readFontScale,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
         }
         if (state.tags.isNotEmpty()) {
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -320,4 +379,148 @@ private fun NotePreviewBody(state: NoteEditViewModel.State, modifier: Modifier =
             color = MaterialTheme.colorScheme.outline,
         )
     }
+}
+
+/**
+ * 编辑器格式工具栏（v1.7.0）。
+ *
+ * 全部作用在**当前选区**上：选中文字就包住它，没选就插入一对空标记把光标放中间。
+ * 按钮的选中态读的是当前选区是否已经带该标记，所以「加粗 → 再点一次」就是取消。
+ */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun FormatToolbar(state: NoteEditViewModel.State, viewModel: NoteEditViewModel) {
+    val dark = MaterialTheme.colorScheme.surface.luminance() < 0.5f
+    val selected = !state.selection.collapsed
+
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                text = stringResource(R.string.format_section),
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.outline,
+            )
+            Spacer(Modifier.width(8.dp))
+            if (!selected) {
+                Text(
+                    text = stringResource(R.string.format_select_hint),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.outline,
+                )
+            }
+        }
+        FlowRow(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            FilterChip(
+                selected = viewModel.selectionHas("**", "**"),
+                onClick = { viewModel.applyBold() },
+                label = { Text(stringResource(R.string.format_bold), fontWeight = FontWeight.Bold) },
+            )
+            FilterChip(
+                selected = viewModel.selectionHas("*", "*"),
+                onClick = { viewModel.applyItalic() },
+                label = { Text(stringResource(R.string.format_italic), fontStyle = FontStyle.Italic) },
+            )
+            MarkupSize.entries.forEach { size ->
+                AssistChip(
+                    onClick = { viewModel.applySize(size) },
+                    label = { Text(stringResource(size.labelRes())) },
+                )
+            }
+            MarkupColor.entries.forEach { color ->
+                Box(
+                    modifier = Modifier
+                        .size(32.dp)
+                        .clip(CircleShape)
+                        .background(color.color(dark))
+                        .border(1.dp, MaterialTheme.colorScheme.outlineVariant, CircleShape)
+                        .clickable { viewModel.applyColor(color) },
+                )
+            }
+        }
+    }
+}
+
+private fun MarkupSize.labelRes(): Int = when (this) {
+    MarkupSize.SMALL -> R.string.size_small
+    MarkupSize.LARGE -> R.string.size_large
+    MarkupSize.XLARGE -> R.string.size_xlarge
+}
+
+/**
+ * 阅读显示二级菜单的内容：展示方式 + 字号滑块。
+ *
+ * 字号用「倍率」而不是绝对值：全局字号（设置页）改了，这里仍然按同一个比例走，
+ * 两处设置不会互相打架。滑块旁边直接显示换算后的 sp 值，方便对着调。
+ *
+ * 放在顶栏菜单里而不是底栏：底栏会一直压着正文，长笔记读起来碍事。
+ */
+@Composable
+private fun ReadingMenuContent(state: NoteEditViewModel.State, viewModel: NoteEditViewModel) {
+    val bodySp = MaterialTheme.typography.bodyMedium.fontSize
+    Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
+        Text(
+            text = stringResource(R.string.read_options),
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.outline,
+        )
+        Spacer(Modifier.size(8.dp))
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            ReadMode.entries.forEach { mode ->
+                FilterChip(
+                    selected = state.readMode == mode,
+                    onClick = { viewModel.setReadMode(mode) },
+                    label = {
+                        Text(
+                            stringResource(
+                                if (mode == ReadMode.MD) R.string.read_mode_md else R.string.read_mode_text,
+                            ),
+                        )
+                    },
+                    modifier = Modifier.padding(end = 8.dp),
+                )
+            }
+        }
+        Spacer(Modifier.size(4.dp))
+        Text(
+            text = stringResource(
+                R.string.read_font_value,
+                (bodySp.value * state.readFontScale).roundToInt(),
+            ),
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.outline,
+        )
+        Row(
+            modifier = Modifier.width(320.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(text = "A", style = MaterialTheme.typography.labelSmall)
+            Slider(
+                value = state.readFontScale,
+                onValueChange = viewModel::setReadFontScale,
+                valueRange = READ_FONT_MIN..READ_FONT_MAX,
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(horizontal = 12.dp),
+            )
+            Text(text = "A", style = MaterialTheme.typography.titleLarge)
+        }
+    }
+}
+
+/** 文本模式：原文照排（含标记本身），只做字号缩放。 */
+@Composable
+private fun PlainNoteText(text: String, scale: Float, modifier: Modifier = Modifier) {
+    val base = MaterialTheme.typography.bodyMedium
+    Text(
+        text = text,
+        modifier = modifier,
+        style = base.copy(
+            fontSize = base.fontSize * scale,
+            lineHeight = base.lineHeight * scale,
+        ),
+    )
 }

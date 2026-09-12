@@ -248,4 +248,21 @@
     <string name="text_color_forest">深緑</string>
     <string name="text_color_navy">紺</string>
     <string name="text_color_wine">ワイン</string>
+    <string name="read_mode_md">Markdown モード</string>
+    <string name="read_mode_text">テキストモード</string>
+    <string name="read_font_value">文字サイズ %1$d sp</string>
+    <string name="format_section">書式</string>
+    <string name="format_select_hint">文字を選択してから下のボタンを押してください</string>
+    <string name="format_bold">太字</string>
+    <string name="format_italic">斜体</string>
+    <string name="size_small">小</string>
+    <string name="size_large">大</string>
+    <string name="size_xlarge">特大</string>
+    <string name="color_red">赤</string>
+    <string name="color_yellow">黄</string>
+    <string name="color_green">緑</string>
+    <string name="color_cyan">青</string>
+    <string name="color_blue">青藍</string>
+    <string name="color_purple">紫</string>
+    <string name="read_options">表示設定</string>
 </resources>
