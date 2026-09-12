@@ -38,6 +38,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.xinjigalaxy.knownotes.R
+import com.xinjigalaxy.knownotes.data.markup.InlineMarkup
 import com.xinjigalaxy.knownotes.data.model.NoteWithTags
 import com.xinjigalaxy.knownotes.ui.NoteLayout
 
@@ -68,7 +69,7 @@ fun NoteCollectionScreen(
         } else {
             notes.filter { item ->
                 item.note.title.lowercase().contains(q) ||
-                    item.note.content.lowercase().contains(q) ||
+                    InlineMarkup.plain(item.note.content).lowercase().contains(q) ||
                     item.tags.any { it.name.lowercase().contains(q) }
             }
         }

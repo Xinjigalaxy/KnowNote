@@ -248,4 +248,21 @@
     <string name="text_color_forest">墨绿</string>
     <string name="text_color_navy">深蓝</string>
     <string name="text_color_wine">酒红</string>
+    <string name="read_mode_md">MD 模式</string>
+    <string name="read_mode_text">文本模式</string>
+    <string name="read_font_value">字号 %1$d sp</string>
+    <string name="format_section">格式</string>
+    <string name="format_select_hint">选中文字后点下面的按钮加格式</string>
+    <string name="format_bold">加粗</string>
+    <string name="format_italic">斜体</string>
+    <string name="size_small">小</string>
+    <string name="size_large">大</string>
+    <string name="size_xlarge">特大</string>
+    <string name="color_red">红</string>
+    <string name="color_yellow">黄</string>
+    <string name="color_green">绿</string>
+    <string name="color_cyan">青</string>
+    <string name="color_blue">蓝</string>
+    <string name="color_purple">紫</string>
+    <string name="read_options">阅读显示</string>
 </resources>

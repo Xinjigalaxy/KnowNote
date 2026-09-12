@@ -1,5 +1,7 @@
 package com.xinjigalaxy.knownotes.data.fts
 
+import com.xinjigalaxy.knownotes.data.markup.InlineMarkup
+
 import java.util.Locale
 
 /**
@@ -35,7 +37,11 @@ object FtsText {
     /** 写入 FTS 索引的文本：CJK 逐字空格分隔，拉丁词小写整词保留。 */
     fun index(text: String): String {
         if (text.isEmpty()) return ""
-        val out = StringBuilder(text.length + 8)
+        // 行内标记不进索引：`color` / `size` 这些标签名不是笔记内容，
+        // 搜到它们却没东西可高亮，比搜不到更让人困惑。
+        val source = InlineMarkup.plain(text)
+        if (source.isEmpty()) return ""
+        val out = StringBuilder(source.length + 8)
         val word = StringBuilder()
         fun flushWord() {
             if (word.isNotEmpty()) {
@@ -47,7 +53,7 @@ object FtsText {
             }
         }
 
-        for (ch in text) {
+        for (ch in source) {
             when {
                 isCjk(ch) -> {
                     flushWord()

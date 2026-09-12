@@ -22,6 +22,7 @@ import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import com.xinjigalaxy.knownotes.data.markup.InlineMarkup
 import androidx.compose.ui.unit.dp
 import com.xinjigalaxy.knownotes.R
 import androidx.compose.material3.Text as M3Text
@@ -42,7 +43,10 @@ fun HighlightedText(
     maxLines: Int = Int.MAX_VALUE,
     color: Color = MaterialTheme.colorScheme.primary,
 ) {
-    val annotated = remember(text, terms, color) { highlight(text, terms, color) }
+    // 列表 / 卡片这类"扫一眼"的地方只显示可读文字：自定义标记与 Markdown 记号都是写给
+    // 渲染器看的，直接显示会变成 `<color=blue><size=1.5>…`、`**粗体**` 这样一长串噪声。
+    val plain = remember(text) { InlineMarkup.summary(text) }
+    val annotated = remember(plain, terms, color) { highlight(plain, terms, color) }
     M3Text(
         text = annotated,
         style = style,

@@ -66,3 +66,24 @@ enum class TextColorOption(val light: Long?, val dark: Long?) {
             entries.firstOrNull { it.name == name } ?: THEME
     }
 }
+
+/**
+ * 阅读页的展示方式（v1.7.0）：渲染 Markdown，还是原样看文本。
+ *
+ * 两者都有人需要 —— 渲染适合读，原文适合改（尤其带 `<color>` / `<size>` 这类行内标记时，
+ * 只有原文模式才能看出标记到底长什么样）。
+ */
+enum class ReadMode(val prefName: String) {
+    MD("md"),
+    TEXT("text"),
+    ;
+
+    companion object {
+        fun fromName(name: String?): ReadMode = entries.firstOrNull { it.prefName == name } ?: MD
+    }
+}
+
+/** 阅读页字号倍率的可调范围（滑块用）。 */
+const val READ_FONT_MIN = 0.8f
+const val READ_FONT_MAX = 1.8f
+const val READ_FONT_DEFAULT = 1.0f

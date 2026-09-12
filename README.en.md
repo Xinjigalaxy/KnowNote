@@ -22,6 +22,8 @@ Notes + tags + groups, full-text search over the note body, Markdown preview, a 
 - **Search you can aim.** Limit a query to title, body or tags (all three by default); the candidate set widens automatically when you narrow, so filtering never hides results.
 - **Case-insensitive everywhere.** Index and query both fold with `lowercase(Locale.ROOT)`, so `Android`, `android` and `GRADLE` hit the same note; search history merges duplicates case-insensitively too.
 - **Reading display.** Five text sizes (the whole Typography scales proportionally, so the heading/body hierarchy survives) and seven text colours with separate light and dark values.
+- **Reading your way.** A slider on the note page sets the reading size (0.8×–1.8×, showing the resulting sp value) and you can switch between rendered Markdown and the raw text — handy when hand-editing markup. Both are stored as a ratio, so the global text size and the reading slider never fight each other.
+- **Inline formatting.** Select text in the editor to make it **bold**, *italic*, one of three sizes, or one of six colours (red/yellow/green/cyan/blue/purple). It is stored as `<color=red>…</color>` / `<size=1.25>…</size>` inside the plain body; sizes are relative (em) so they stack with the reading slider, and every colour has a light and a dark variant.
 - **Three ways to organise.** Tags, groups, and combined filtering; tapping a tag or group opens a dedicated page with the same card layout and list ↔ staggered-grid toggle.
 - **Never lose a note.** Long-press deletes, everything lands in Trash first, and cleanup is opt-in: WorkManager runs once a day, keeps 7/30/90 days, and reports back what it removed.
 - **Reads like notes should.** Tap = preview (Markdown rendered), long-press = edit. Only saves when you actually changed something.
@@ -137,6 +139,7 @@ service in this version, so the process can be reclaimed by the system.
 | v1.4.0 | Settings page (theme mode, dynamic colour, scheduled trash cleanup); overview counters became Room Flows so they update live |
 | v1.5.0 | Four UI languages with per-app locale support; renamed to **KnowNote / 碎片笔记**; adaptive icon with a proper monochrome layer; internal diagnostics unified to English. Also fixed a bug only visible on a device: Kotlin templates in *translations* were written into resources verbatim, so the Japanese UI showed `$days 日` |
 | v1.6.0 | Adjustable reading display (five sizes, seven text colours) and a search you can aim (title / body / tags, all by default; case-insensitive everywhere). The text colour has to be applied to **theme colour roles**, not `LocalContentColor` — 60+ Texts set an explicit colour, so only roles take effect |
+| v1.7.0 | Per-page reading controls (size slider as a ratio, markdown ↔ raw text) and inline formatting in the editor (bold / italic / three sizes / six colours, stored as `<color>` / `<size>` tags in the plain body). The renderer now parses nested inline tokens — bold-outside-colour used to leak the tags as literal text. Unit tests 16 → **38** |
 
 ## Roadmap
 

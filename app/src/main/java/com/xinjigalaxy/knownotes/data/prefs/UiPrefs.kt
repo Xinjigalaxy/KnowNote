@@ -3,6 +3,7 @@ package com.xinjigalaxy.knownotes.data.prefs
 import android.content.Context
 import com.xinjigalaxy.knownotes.data.settings.FontScale
 import com.xinjigalaxy.knownotes.data.settings.TextColorOption
+import com.xinjigalaxy.knownotes.data.settings.READ_FONT_DEFAULT
 import com.xinjigalaxy.knownotes.data.settings.ThemeMode
 import com.xinjigalaxy.knownotes.data.sync.SYNC_DEFAULT_PORT
 
@@ -123,6 +124,20 @@ class UiPrefs(context: Context) {
         prefs.edit().putString(KEY_LANGUAGE, tag).apply()
     }
 
+    /** 阅读页字号倍率（只作用于阅读页）。 */
+    fun readFontScale(): Float = prefs.getFloat(KEY_READ_FONT_SCALE, READ_FONT_DEFAULT)
+
+    fun saveReadFontScale(value: Float) {
+        prefs.edit().putFloat(KEY_READ_FONT_SCALE, value).apply()
+    }
+
+    /** 阅读页展示方式；没设置过返回 null 交给 ReadMode 取默认值。 */
+    fun readModeOrNull(): String? = prefs.getString(KEY_READ_MODE, null)
+
+    fun saveReadMode(name: String) {
+        prefs.edit().putString(KEY_READ_MODE, name).apply()
+    }
+
     /** 检索范围（title/content/tags 的组合）；没设置过返回 null 表示"默认全选"。 */
     fun searchScopesOrNull(): Set<String>? = prefs.getStringSet(KEY_SEARCH_SCOPE, null)
 
@@ -161,6 +176,8 @@ class UiPrefs(context: Context) {
         const val KEY_SEARCH_SCOPE = "search_scope"
         const val KEY_FONT_SCALE = "font_scale"
         const val KEY_TEXT_COLOR = "text_color"
+        const val KEY_READ_FONT_SCALE = "read_font_scale"
+        const val KEY_READ_MODE = "read_mode"
         const val DEFAULT_RETENTION_DAYS = 30
     }
 }

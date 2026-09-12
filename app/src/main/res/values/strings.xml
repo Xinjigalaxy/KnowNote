@@ -251,4 +251,21 @@
     <string name="text_color_forest">Forest</string>
     <string name="text_color_navy">Navy</string>
     <string name="text_color_wine">Wine</string>
+    <string name="read_mode_md">MD mode</string>
+    <string name="read_mode_text">Plain text</string>
+    <string name="read_font_value">Size %1$d sp</string>
+    <string name="format_section">Format</string>
+    <string name="format_select_hint">Select text, then tap a style below</string>
+    <string name="format_bold">Bold</string>
+    <string name="format_italic">Italic</string>
+    <string name="size_small">Small</string>
+    <string name="size_large">Large</string>
+    <string name="size_xlarge">Larger</string>
+    <string name="color_red">Red</string>
+    <string name="color_yellow">Yellow</string>
+    <string name="color_green">Green</string>
+    <string name="color_cyan">Cyan</string>
+    <string name="color_blue">Blue</string>
+    <string name="color_purple">Purple</string>
+    <string name="read_options">Reading display</string>
 </resources>

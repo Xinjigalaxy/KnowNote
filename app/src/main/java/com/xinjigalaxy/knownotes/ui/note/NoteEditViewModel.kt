@@ -1,10 +1,21 @@
 package com.xinjigalaxy.knownotes.ui.note
 
+import androidx.compose.ui.text.TextRange
+import androidx.compose.ui.text.input.TextFieldValue
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.xinjigalaxy.knownotes.data.model.Group
 import com.xinjigalaxy.knownotes.data.model.Tag
+import com.xinjigalaxy.knownotes.data.prefs.UiPrefs
 import com.xinjigalaxy.knownotes.data.repo.NoteRepository
+import com.xinjigalaxy.knownotes.data.settings.READ_FONT_DEFAULT
+import com.xinjigalaxy.knownotes.data.settings.READ_FONT_MAX
+import com.xinjigalaxy.knownotes.data.settings.READ_FONT_MIN
+import com.xinjigalaxy.knownotes.data.settings.ReadMode
+import com.xinjigalaxy.knownotes.ui.markdown.MarkupColor
+import com.xinjigalaxy.knownotes.ui.markdown.MarkupEdit
+import com.xinjigalaxy.knownotes.ui.markdown.MarkupResult
+import com.xinjigalaxy.knownotes.ui.markdown.MarkupSize
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -13,12 +24,22 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
-class NoteEditViewModel(private val repo: NoteRepository) : ViewModel() {
+class NoteEditViewModel(
+    private val repo: NoteRepository,
+    private val prefs: UiPrefs,
+) : ViewModel() {
 
     data class State(
         val noteId: Long? = null,
         val title: String = "",
-        val content: String = "",
+        /**
+         * 正文用 TextFieldValue 而不是 String。
+         *
+         * 光标与选区是"编辑状态"的一部分：工具栏要把标记加在**选中的那一段**上，
+         * 就必须能读到选区并写回新选区。放一份在这里，UI 就不用再存一份自己的状态
+         * 来回同步（那种写法很容易在重组时把光标位置搞丢）。
+         */
+        val contentField: TextFieldValue = TextFieldValue(""),
         val groupId: Long? = null,
         val tags: List<String> = emptyList(),
         val createdAt: Long = 0L,
@@ -28,8 +49,17 @@ class NoteEditViewModel(private val repo: NoteRepository) : ViewModel() {
         val missing: Boolean = false,
         /** 预览模式：渲染 Markdown 而不是编辑原文（需求文档 5.2）。 */
         val preview: Boolean = false,
+        /** 阅读页字号倍率 —— 只作用于阅读页，不改全局字号设置（v1.7.0）。 */
+        val readFontScale: Float = READ_FONT_DEFAULT,
+        /** 阅读页展示方式：渲染 Markdown / 原文（v1.7.0）。 */
+        val readMode: ReadMode = ReadMode.MD,
     ) {
         val isNew: Boolean get() = noteId == null
+
+        /** 纯文本正文。保存 / 预览 / 格式化全部走它。 */
+        val content: String get() = contentField.text
+
+        val selection: TextRange get() = contentField.selection
     }
 
     private val _state = MutableStateFlow(State())
@@ -47,8 +77,15 @@ class NoteEditViewModel(private val repo: NoteRepository) : ViewModel() {
     fun load(noteId: Long?, openInPreview: Boolean) {
         if (_state.value.loaded) return
         viewModelScope.launch {
+            val readFontScale = prefs.readFontScale()
+            val readMode = ReadMode.fromName(prefs.readModeOrNull())
             if (noteId == null || noteId == 0L) {
-                _state.value = State(loaded = true, preview = openInPreview)
+                _state.value = State(
+                    loaded = true,
+                    preview = openInPreview,
+                    readFontScale = readFontScale,
+                    readMode = readMode,
+                )
                 return@launch
             }
             val loaded = repo.note(noteId)
@@ -58,13 +95,15 @@ class NoteEditViewModel(private val repo: NoteRepository) : ViewModel() {
                 State(
                     noteId = loaded.note.id,
                     title = loaded.note.title,
-                    content = loaded.note.content,
+                    contentField = TextFieldValue(loaded.note.content),
                     groupId = loaded.note.groupId,
                     tags = loaded.tags.map { it.name },
                     createdAt = loaded.note.createdAt,
                     updatedAt = loaded.note.updatedAt,
                     loaded = true,
                     preview = openInPreview,
+                    readFontScale = readFontScale,
+                    readMode = readMode,
                 )
             }
         }
@@ -77,7 +116,58 @@ class NoteEditViewModel(private val repo: NoteRepository) : ViewModel() {
 
     fun setTitle(value: String) = _state.update { it.copy(title = value, dirty = true) }
 
-    fun setContent(value: String) = _state.update { it.copy(content = value, dirty = true) }
+    /** 输入框直接上报（自带光标 / 选区）。 */
+    fun setContentField(value: TextFieldValue) =
+        _state.update { it.copy(contentField = value, dirty = true) }
+
+    /** 纯文本替换（光标落到末尾），给非输入框场景用。 */
+    fun setContent(value: String) = _state.update {
+        it.copy(contentField = TextFieldValue(value, TextRange(value.length)), dirty = true)
+    }
+
+    // ---------- 编辑器工具栏（对选区施加行内标记）----------
+
+    fun applyBold() = transformSelection { MarkupEdit.bold(it.text, it.selection.start, it.selection.end) }
+
+    fun applyItalic() = transformSelection { MarkupEdit.italic(it.text, it.selection.start, it.selection.end) }
+
+    fun applyColor(color: MarkupColor) = transformSelection {
+        MarkupEdit.recolor(it.text, it.selection.start, it.selection.end, color)
+    }
+
+    fun applySize(size: MarkupSize) = transformSelection {
+        MarkupEdit.resize(it.text, it.selection.start, it.selection.end, size)
+    }
+
+    private fun transformSelection(block: (TextFieldValue) -> MarkupResult) {
+        val result = block(_state.value.contentField)
+        _state.update {
+            it.copy(
+                contentField = TextFieldValue(result.text, TextRange(result.start, result.end)),
+                dirty = true,
+            )
+        }
+    }
+
+    /** 当前选区是否已经带该标记（工具栏按钮的选中态）。 */
+    fun selectionHas(open: String, close: String): Boolean {
+        val field = _state.value.contentField
+        return MarkupEdit.hasMarkup(field.text, field.selection.start, field.selection.end, open, close)
+    }
+
+    // ---------- 阅读页显示 ----------
+
+    /** 只存"倍率"不存绝对值：全局字号改了，阅读页仍然跟着同一个比例走。 */
+    fun setReadFontScale(value: Float) {
+        val clamped = value.coerceIn(READ_FONT_MIN, READ_FONT_MAX)
+        prefs.saveReadFontScale(clamped)
+        _state.update { it.copy(readFontScale = clamped) }
+    }
+
+    fun setReadMode(mode: ReadMode) {
+        prefs.saveReadMode(mode.prefName)
+        _state.update { it.copy(readMode = mode) }
+    }
 
     fun setGroup(groupId: Long?) = _state.update { it.copy(groupId = groupId, dirty = true) }
 
