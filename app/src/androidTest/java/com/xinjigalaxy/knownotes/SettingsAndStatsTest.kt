@@ -8,7 +8,10 @@ import com.xinjigalaxy.knownotes.data.db.FtsSchemaCallback
 import com.xinjigalaxy.knownotes.data.prefs.UiPrefs
 import com.xinjigalaxy.knownotes.data.repo.NoteRepository
 import com.xinjigalaxy.knownotes.data.settings.AppSettings
+import com.xinjigalaxy.knownotes.data.settings.FontScale
+import com.xinjigalaxy.knownotes.data.settings.TextColorOption
 import com.xinjigalaxy.knownotes.data.settings.ThemeMode
+import com.xinjigalaxy.knownotes.data.search.SearchScope
 import com.xinjigalaxy.knownotes.data.sync.SyncEngine
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -152,18 +155,33 @@ class SettingsAndStatsTest {
         settings.setDynamicColor(true)
         settings.setAutoPurgeTrash(true)
         settings.setTrashRetentionDays(7)
+        settings.setFontScale(FontScale.LARGE)
+        settings.setTextColor(TextColorOption.SEPIA)
 
         val reloaded = AppSettings(UiPrefs(context)).state.value
         assertEquals(ThemeMode.DARK, reloaded.themeMode)
         assertTrue(reloaded.dynamicColor)
         assertTrue(reloaded.autoPurgeTrash)
         assertEquals(7, reloaded.trashRetentionDays)
+        assertEquals("字号要真的落盘（换 Theme 靠它）", FontScale.LARGE, reloaded.fontScale)
+        assertEquals("文字颜色要真的落盘", TextColorOption.SEPIA, reloaded.textColor)
+
+        // 检索范围存的是 pref 名，重新读出来必须还原成同一组
+        val prefs = UiPrefs(context)
+        prefs.saveSearchScopes(SearchScope.toPrefs(setOf(SearchScope.TAGS)))
+        assertEquals(
+            setOf(SearchScope.TAGS),
+            SearchScope.fromPrefs(UiPrefs(context).searchScopesOrNull()),
+        )
 
         // 复原，别把应用偏好留在测试改过的状态
         settings.setThemeMode(ThemeMode.SYSTEM)
         settings.setDynamicColor(false)
         settings.setAutoPurgeTrash(false)
         settings.setTrashRetentionDays(AppSettings.DEFAULT_RETENTION_DAYS)
+        settings.setFontScale(FontScale.NORMAL)
+        settings.setTextColor(TextColorOption.THEME)
+        prefs.saveSearchScopes(SearchScope.toPrefs(SearchScope.ALL))
         assertEquals(ThemeMode.SYSTEM, AppSettings(UiPrefs(context)).state.value.themeMode)
     }
 }

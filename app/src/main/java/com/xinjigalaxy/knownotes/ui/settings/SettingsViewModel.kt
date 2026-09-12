@@ -7,6 +7,8 @@ import com.xinjigalaxy.knownotes.data.prefs.UiPrefs
 import com.xinjigalaxy.knownotes.data.repo.NoteRepository
 import com.xinjigalaxy.knownotes.data.settings.AppLanguage
 import com.xinjigalaxy.knownotes.data.settings.AppSettings
+import com.xinjigalaxy.knownotes.data.settings.FontScale
+import com.xinjigalaxy.knownotes.data.settings.TextColorOption
 import com.xinjigalaxy.knownotes.data.settings.ThemeMode
 import com.xinjigalaxy.knownotes.ui.components.UiMessage
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -41,6 +43,8 @@ class SettingsViewModel(
         val lastPurgeAt: Long = 0L,
         val lastPurgeCount: Int = 0,
         val language: AppLanguage = AppLanguage.SYSTEM,
+        val fontScale: FontScale = FontScale.NORMAL,
+        val textColor: TextColorOption = TextColorOption.THEME,
         val busy: Boolean = false,
         val message: UiMessage? = null,
     )
@@ -73,6 +77,8 @@ class SettingsViewModel(
             lastPurgeAt = l.lastPurgeAt,
             lastPurgeCount = l.lastPurgeCount,
             language = app.language,
+            fontScale = app.fontScale,
+            textColor = app.textColor,
             busy = l.busy,
             message = l.message,
         )
@@ -85,6 +91,14 @@ class SettingsViewModel(
     fun setLanguage(language: AppLanguage) {
         settings.setLanguage(language)
         applyLocale(language)
+    }
+
+    fun setFontScale(scale: FontScale) {
+        settings.setFontScale(scale)
+    }
+
+    fun setTextColor(option: TextColorOption) {
+        settings.setTextColor(option)
     }
 
     fun setThemeMode(mode: ThemeMode) {

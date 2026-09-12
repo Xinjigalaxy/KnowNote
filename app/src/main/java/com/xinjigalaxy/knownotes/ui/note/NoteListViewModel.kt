@@ -9,6 +9,7 @@ import com.xinjigalaxy.knownotes.data.model.SearchHistory
 import com.xinjigalaxy.knownotes.data.model.Tag
 import com.xinjigalaxy.knownotes.data.prefs.UiPrefs
 import com.xinjigalaxy.knownotes.data.repo.NoteRepository
+import com.xinjigalaxy.knownotes.data.search.SearchScope
 import com.xinjigalaxy.knownotes.ui.NoteLayout
 import com.xinjigalaxy.knownotes.ui.toNoteLayout
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -50,6 +51,8 @@ data class NoteListUiState(
     val showSearchHistory: Boolean = false,
     /** 列表 / 瀑布流 */
     val layout: NoteLayout = NoteLayout.LIST,
+    /** 检索范围（标题 / 正文 / 标签），默认全选。 */
+    val searchScopes: Set<SearchScope> = SearchScope.ALL,
 )
 
 @OptIn(FlowPreview::class, ExperimentalCoroutinesApi::class)
@@ -63,6 +66,7 @@ class NoteListViewModel(
     private val groupFilter = MutableStateFlow(prefs.groupFilterOrNull() ?: GROUP_ALL)
     private val searchFocused = MutableStateFlow(false)
     private val layout = MutableStateFlow(prefs.noteLayoutOrNull().toNoteLayout())
+    private val searchScopes = MutableStateFlow(SearchScope.fromPrefs(prefs.searchScopesOrNull()))
 
     /** 输入即搜，防抖 300ms（需求文档 3.4）。 */
     private val debouncedQuery = query
@@ -71,17 +75,19 @@ class NoteListViewModel(
         .distinctUntilChanged()
 
     /** FTS5 命中的 id（按相关度排序）；查询为空时为 null，表示不做检索过滤。 */
-    private val matchedIds: Flow<List<Long>?> = debouncedQuery.flatMapLatest { text ->
-        if (text.isEmpty()) {
-            flowOf(null)
-        } else {
-            flow<List<Long>> { emit(repo.searchIds(text)) }
-        }
-    }
+    private val matchedIds: Flow<List<Long>?> =
+        combine(debouncedQuery, searchScopes) { text, scopes -> text to scopes }
+            .flatMapLatest { (text, scopes) ->
+                if (text.isEmpty()) {
+                    flowOf(null)
+                } else {
+                    flow<List<Long>> { emit(repo.searchIds(text, SearchScope.candidateLimit(scopes))) }
+                }
+            }
 
     private val criteria: Flow<FilterState> = combine(
-        combine(query, selectedTagIds, groupFilter, debouncedQuery) { q, tagIds, group, debounced ->
-            FilterState(query = q, tagIds = tagIds, group = group, debounced = debounced)
+        combine(query, selectedTagIds, groupFilter, debouncedQuery, searchScopes) { q, tagIds, group, debounced, scopes ->
+            FilterState(query = q, tagIds = tagIds, group = group, debounced = debounced, scopes = scopes)
         },
         repo.observeRecentSearches(),
         searchFocused,
@@ -103,10 +109,20 @@ class NoteListViewModel(
             val order: Map<Long, Int> = ids.withIndex().associate { (index, id) -> id to index }
             allNotes.filter { it.note.id in order }.sortedBy { order[it.note.id] }
         }
+        // 范围筛选放在结果侧：FTS 的列限定（`title:词`）属于"增强查询语法"，
+        // Android 自带 SQLite 没编 SQLITE_ENABLE_FTS3_PARENTHESIS，真机上根本用不了；
+        // 而 allNotes 本来就在内存里，过滤一次既可靠、又让 FTS / LIKE 两条路径语义一致。
+        val scoped: List<NoteWithTags> =
+            if (ids == null || filter.scopes.size == SearchScope.entries.size) {
+                ranked
+            } else {
+                val terms = FtsText.highlightTerms(filter.debounced)
+                ranked.filter { SearchScope.matches(it, terms, filter.scopes) }
+            }
         val byTag = if (filter.tagIds.isEmpty()) {
-            ranked
+            scoped
         } else {
-            ranked.filter { nw -> nw.tags.any { it.id in filter.tagIds } }
+            scoped.filter { nw -> nw.tags.any { it.id in filter.tagIds } }
         }
         val visible = when (filter.group) {
             GROUP_ALL -> byTag
@@ -129,6 +145,7 @@ class NoteListViewModel(
             searchHistory = filter.history,
             showSearchHistory = filter.focused && filter.query.isBlank() && filter.history.isNotEmpty(),
             layout = filter.layout,
+            searchScopes = filter.scopes,
         )
     }.stateIn(
         scope = viewModelScope,
@@ -192,6 +209,21 @@ class NoteListViewModel(
         prefs.saveNoteLayout(layout.value.name)
     }
 
+    /**
+     * 切换检索范围。不允许全部取消 —— 一个都不选会一条都搜不到，
+     * 与其让人对着空列表发呆，不如当成"重新全选"。
+     */
+    fun toggleSearchScope(scope: SearchScope) {
+        val next = searchScopes.value.let { if (scope in it) it - scope else it + scope }
+        searchScopes.value = next.ifEmpty { SearchScope.ALL }
+        prefs.saveSearchScopes(SearchScope.toPrefs(searchScopes.value))
+    }
+
+    fun selectAllSearchScopes() {
+        searchScopes.value = SearchScope.ALL
+        prefs.saveSearchScopes(SearchScope.toPrefs(SearchScope.ALL))
+    }
+
     fun deleteNote(noteId: Long) {
         viewModelScope.launch { repo.deleteNote(noteId) }
     }
@@ -206,6 +238,7 @@ class NoteListViewModel(
         val tagIds: Set<Long>,
         val group: Long,
         val debounced: String,
+        val scopes: Set<SearchScope> = SearchScope.ALL,
         val history: List<SearchHistory> = emptyList(),
         val focused: Boolean = false,
         val layout: NoteLayout = NoteLayout.LIST,

@@ -89,12 +89,36 @@ class NoteRepository(
 
     // ---------- 检索（需求文档 3.3） ----------
 
-    suspend fun searchIds(query: String): List<Long> =
+    suspend fun searchIds(query: String, limit: Int = FtsText.MAX_RESULTS): List<Long> =
         if (fts.available) {
-            fts.searchIds(query)
+            fts.searchIds(query, limit)
         } else {
-            noteDao.likeSearch(query, FtsText.MAX_RESULTS).map { it.id }
+            likeFallbackIds(query, limit)
         }
+
+    /**
+     * 没有全文引擎时的兜底：不分大小写、覆盖标题 / 正文 / 标签。
+     *
+     * 为什么不在 SQL 里 LIKE：SQLite 的 `LIKE`（以及 `LOWER()`）只对 **ASCII** 折叠大小写，
+     * `É` 与 `é` 不算同一个词。这里改成取出在线笔记在 Kotlin 侧比对（contains/equals 走
+     * Unicode 规则），兜底路径与 FTS 路径的**大小写语义就完全一致**了。
+     * 这个分支只在设备连 FTS3/4 都没有时才会走到，个人数据量下这点开销无所谓。
+     */
+    private suspend fun likeFallbackIds(query: String, limit: Int): List<Long> {
+        val terms = FtsText.highlightTerms(query)
+        if (terms.isEmpty()) return emptyList()
+        return noteDao.allOnlineWithTagsOnce()
+            .filter { nw ->
+                val fields = buildList {
+                    add(nw.note.title)
+                    add(nw.note.content)
+                    nw.tags.forEach { add(it.name) }
+                }
+                FtsText.allTermsHit(fields, terms)
+            }
+            .take(limit)
+            .map { it.note.id }
+    }
 
     // ---------- 笔记 CRUD ----------
 
@@ -452,8 +476,13 @@ class NoteRepository(
     suspend fun recordSearch(keyword: String) {
         val clean = keyword.trim()
         if (clean.isEmpty()) return
-        if (historyDao.insert(SearchHistory(keyword = clean)) == -1L) {
-            historyDao.touch(clean, System.currentTimeMillis())
+        // "同一个词"按**忽略大小写**判定：搜过 Android 再搜 android 不该多出一条历史，
+        // 但显示保留已有的写法（谁先记的算谁的）。SQLite 的 NOCASE 只管 ASCII，所以在这里比。
+        val existing = historyDao.allOnce().firstOrNull { it.keyword.equals(clean, ignoreCase = true) }
+        if (existing == null) {
+            historyDao.insert(SearchHistory(keyword = clean))
+        } else {
+            historyDao.touch(existing.keyword, System.currentTimeMillis())
         }
         val keep = historyDao.recentKeywords(SearchHistoryDao.MAX_SUGGESTIONS)
         if (keep.isNotEmpty() && historyDao.count() > keep.size) {

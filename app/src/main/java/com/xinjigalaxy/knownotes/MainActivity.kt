@@ -52,7 +52,12 @@ class MainActivity : ComponentActivity() {
                 ThemeMode.DARK -> true
             }
 
-            KnowNoteTheme(darkTheme = darkTheme, dynamicColor = settings.dynamicColor) {
+            KnowNoteTheme(
+                darkTheme = darkTheme,
+                dynamicColor = settings.dynamicColor,
+                fontScale = settings.fontScale,
+                textColor = settings.textColor,
+            ) {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background,

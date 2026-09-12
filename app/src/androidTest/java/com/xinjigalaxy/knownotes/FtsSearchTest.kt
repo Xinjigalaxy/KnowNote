@@ -290,4 +290,44 @@ class FtsSearchTest {
         assertEquals(listOf(id), repo.searchIds("最左前缀"))
         assertEquals(listOf(id), repo.searchIds("索引"))
     }
+
+    /**
+     * 检索不区分大小写（v1.6.0 明确要求）。
+     *
+     * 三个字段（标题 / 正文 / 标签）都要覆盖，而且大小写各种写法都得命中 ——
+     * 索引侧与查询侧都走 `lowercase(Locale.ROOT)`，所以这里是"确定性"的大小写无关，
+     * 不是碰巧在某台设备上成立。
+     */
+    @Test
+    fun searchIsCaseInsensitiveAcrossAllFields() = runBlocking {
+        val id = repo.saveNote(
+            noteId = null,
+            title = "Android Studio 的 Gradle 同步",
+            content = "SQLite 的 FTS4 与 LIKE 差异",
+            groupId = null,
+            tagNames = listOf("Kotlin"),
+        )
+
+        // 标题：原样 / 全大写 / 全小写 / 混合
+        assertEquals(listOf(id), repo.searchIds("Android"))
+        assertEquals(listOf(id), repo.searchIds("ANDROID"))
+        assertEquals(listOf(id), repo.searchIds("android"))
+        assertEquals(listOf(id), repo.searchIds("gRaDlE"))
+        // 正文
+        assertEquals(listOf(id), repo.searchIds("sqlite"))
+        // 标签
+        assertEquals(listOf(id), repo.searchIds("KOTLIN"))
+    }
+
+    /** 搜索历史里的"同一个词"按忽略大小写判定（v1.6.0）。 */
+    @Test
+    fun searchHistoryMergesCaseInsensitiveDuplicates() = runBlocking {
+        repo.recordSearch("Android")
+        repo.recordSearch("android")
+        repo.recordSearch("ANDROID")
+
+        val history = db.searchHistoryDao().allOnce()
+        assertEquals("大小写不同不该多出历史条目", 1, history.size)
+        assertEquals("显示保留最先记下的写法", "Android", history.first().keyword)
+    }
 }

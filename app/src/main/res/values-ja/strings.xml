@@ -228,4 +228,24 @@
     <string name="permanently_deleted_removed">%1$s 件を完全に削除しました</string>
     <string name="deleted_formattime_item_note_updatedat">削除日時 %1$s</string>
     <string name="restore">復元</string>
+    <string name="search_scope">検索対象</string>
+    <string name="scope_title">タイトル</string>
+    <string name="scope_content">本文</string>
+    <string name="scope_tags">タグ</string>
+    <string name="reading_section">表示</string>
+    <string name="font_scale">文字サイズ</string>
+    <string name="font_scale_small">小</string>
+    <string name="font_scale_normal">標準</string>
+    <string name="font_scale_large">大</string>
+    <string name="font_scale_xlarge">特大</string>
+    <string name="font_scale_huge">最大</string>
+    <string name="font_scale_preview">プレビュー：ノートの本文はこのサイズで表示されます。</string>
+    <string name="text_color">文字色</string>
+    <string name="text_color_theme">テーマに従う</string>
+    <string name="text_color_ink">墨</string>
+    <string name="text_color_black">黒</string>
+    <string name="text_color_sepia">セピア</string>
+    <string name="text_color_forest">深緑</string>
+    <string name="text_color_navy">紺</string>
+    <string name="text_color_wine">ワイン</string>
 </resources>

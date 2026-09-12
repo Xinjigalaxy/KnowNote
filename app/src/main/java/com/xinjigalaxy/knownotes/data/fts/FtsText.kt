@@ -1,5 +1,7 @@
 package com.xinjigalaxy.knownotes.data.fts
 
+import java.util.Locale
+
 /**
  * FTS5 的分词辅助（需求文档 3.2 / 3.3）。
  *
@@ -38,7 +40,9 @@ object FtsText {
         fun flushWord() {
             if (word.isNotEmpty()) {
                 if (out.isNotEmpty()) out.append(' ')
-                out.append(word.toString().lowercase())
+                // Locale.ROOT：默认 locale 在土耳其语环境下会把 "I" 折成 "ı"，
+                // 索引与查询若各折一次就可能对不上 —— 大小写无关必须是确定性的。
+                out.append(word.toString().lowercase(Locale.ROOT))
                 word.setLength(0)
             }
         }
@@ -80,7 +84,7 @@ object FtsText {
 
         fun flushWord() {
             if (word.isEmpty()) return
-            if (groups.size < MAX_GROUPS) groups += "${word.toString().lowercase()}*"
+            if (groups.size < MAX_GROUPS) groups += "${word.toString().lowercase(Locale.ROOT)}*"
             word.setLength(0)
         }
 
@@ -110,6 +114,22 @@ object FtsText {
         // 导致整条查询永远搜不到东西。FTS5 同样支持空格隐式 AND。
         return if (groups.isEmpty()) null else groups.joinToString(" ")
     }
+
+    /**
+     * 某个词元是否出现在文本里。
+     *
+     * 刻意的两点：
+     * - **不区分大小写**：索引侧与查询侧都走 lowercase，这里也用 ignoreCase 对齐，
+     *   免得出现「索引里是小写、你搜大写就搜不到」这种半截子的大小写无关。
+     * - 用子串判断而不是前缀：CJK 本来就是子串语义，拉丁词在索引侧是前缀匹配，
+     *   子串是前缀的超集，用来判断"命中落在哪个字段"足够，也不会漏。
+     */
+    fun textHits(text: String, term: String): Boolean =
+        term.isNotEmpty() && text.contains(term, ignoreCase = true)
+
+    /** 一组词元能否在给定字段里全部找到（每个词元至少命中一个字段）。 */
+    fun allTermsHit(fields: List<String>, terms: List<String>): Boolean =
+        terms.all { term -> fields.any { textHits(it, term) } }
 
     /** 结果高亮用：CJK 连续串整体高亮，拉丁词整词高亮。 */
     fun highlightTerms(input: String): List<String> {

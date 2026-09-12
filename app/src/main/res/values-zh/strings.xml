@@ -228,4 +228,24 @@
     <string name="permanently_deleted_removed">已永久删除 %1$s 条</string>
     <string name="deleted_formattime_item_note_updatedat">删除于 %1$s</string>
     <string name="restore">恢复</string>
+    <string name="search_scope">检索范围</string>
+    <string name="scope_title">标题</string>
+    <string name="scope_content">正文</string>
+    <string name="scope_tags">标签</string>
+    <string name="reading_section">阅读</string>
+    <string name="font_scale">字号</string>
+    <string name="font_scale_small">小</string>
+    <string name="font_scale_normal">标准</string>
+    <string name="font_scale_large">大</string>
+    <string name="font_scale_xlarge">特大</string>
+    <string name="font_scale_huge">超大</string>
+    <string name="font_scale_preview">预览：笔记正文会以这个字号显示。</string>
+    <string name="text_color">文字颜色</string>
+    <string name="text_color_theme">跟随主题</string>
+    <string name="text_color_ink">深墨</string>
+    <string name="text_color_black">纯黑</string>
+    <string name="text_color_sepia">暖褐</string>
+    <string name="text_color_forest">墨绿</string>
+    <string name="text_color_navy">深蓝</string>
+    <string name="text_color_wine">酒红</string>
 </resources>

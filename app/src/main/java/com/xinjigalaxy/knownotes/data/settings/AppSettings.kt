@@ -43,6 +43,8 @@ class AppSettings(private val prefs: UiPrefs) {
         val autoPurgeTrash: Boolean = false,
         val trashRetentionDays: Int = DEFAULT_RETENTION_DAYS,
         val language: AppLanguage = AppLanguage.SYSTEM,
+        val fontScale: FontScale = FontScale.NORMAL,
+        val textColor: TextColorOption = TextColorOption.THEME,
     )
 
     private val _state = MutableStateFlow(read())
@@ -54,11 +56,23 @@ class AppSettings(private val prefs: UiPrefs) {
         autoPurgeTrash = prefs.autoPurgeTrash(),
         trashRetentionDays = prefs.trashRetentionDays(),
         language = AppLanguage.fromTag(prefs.appLanguage()),
+        fontScale = FontScale.fromName(prefs.fontScale()),
+        textColor = TextColorOption.fromName(prefs.textColor()),
     )
 
     fun setLanguage(language: AppLanguage) {
         prefs.saveAppLanguage(language.tag)
         _state.update { it.copy(language = language) }
+    }
+
+    fun setFontScale(scale: FontScale) {
+        prefs.saveFontScale(scale.name)
+        _state.update { it.copy(fontScale = scale) }
+    }
+
+    fun setTextColor(option: TextColorOption) {
+        prefs.saveTextColor(option.name)
+        _state.update { it.copy(textColor = option) }
     }
 
     fun setThemeMode(mode: ThemeMode) {

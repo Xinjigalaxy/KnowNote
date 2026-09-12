@@ -20,6 +20,10 @@ interface SearchHistoryDao {
     )
     fun observeTop(limit: Int = MAX_SUGGESTIONS): Flow<List<SearchHistory>>
 
+    /** 搜过的词全取出来（条数上限很小，用于在 Kotlin 侧做忽略大小写的判定）。 */
+    @Query("SELECT * FROM search_history")
+    suspend fun allOnce(): List<SearchHistory>
+
     @Query("SELECT COUNT(*) FROM search_history")
     suspend fun count(): Int
 
