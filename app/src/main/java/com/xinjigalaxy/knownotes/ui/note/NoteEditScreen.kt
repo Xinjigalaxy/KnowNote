@@ -1,6 +1,10 @@
 package com.xinjigalaxy.knownotes.ui.note
 
+import android.widget.Toast
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -51,12 +55,14 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.res.stringResource
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
@@ -73,8 +79,12 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.xinjigalaxy.knownotes.ui.AppViewModelProvider
 import com.xinjigalaxy.knownotes.ui.components.formatFullTime
 import com.xinjigalaxy.knownotes.ui.markdown.MarkupColor
-import com.xinjigalaxy.knownotes.ui.markdown.MarkdownText
+import com.xinjigalaxy.knownotes.data.media.NoteImages
+import com.xinjigalaxy.knownotes.ui.markdown.NoteBodyText
 import com.xinjigalaxy.knownotes.ui.markdown.MarkupSize
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlin.math.roundToInt
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
@@ -97,6 +107,26 @@ fun NoteEditScreen(
     var showNewGroup by remember { mutableStateOf(false) }
     var confirmDelete by remember { mutableStateOf(false) }
     var showReadingMenu by remember { mutableStateOf(false) }
+
+    // 图片：用系统相册选择器（PickVisualMedia），不必申请读相册权限
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val imageAlt = stringResource(R.string.image)
+    val pickImage = rememberLauncherForActivityResult(
+        ActivityResultContracts.PickVisualMedia(),
+    ) { uri ->
+        if (uri != null) {
+            scope.launch {
+                // 拷贝 + 缩放可能涉及几十兆的读写，别放在主线程
+                val name = withContext(Dispatchers.IO) { NoteImages.importFrom(context, uri) }
+                if (name == null) {
+                    Toast.makeText(context, R.string.image_insert_failed, Toast.LENGTH_SHORT).show()
+                } else {
+                    viewModel.insertImageReference(name, imageAlt)
+                }
+            }
+        }
+    }
 
     // 返回键 = 保存后退出，避免误退丢内容（输入框里没点确认的标签也一起带上）
     BackHandler(enabled = true) { viewModel.saveOnExit(tagInput, onDone) }
@@ -182,7 +212,15 @@ fun NoteEditScreen(
                 placeholder = { Text(stringResource(R.string.jot_fragmented_notes_anytime_code_snippets_paste)) },
             )
 
-            FormatToolbar(state = state, viewModel = viewModel)
+            FormatToolbar(
+                state = state,
+                viewModel = viewModel,
+                onPickImage = {
+                    pickImage.launch(
+                        PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly),
+                    )
+                },
+            )
 
             HorizontalDivider()
 
@@ -353,8 +391,8 @@ private fun NotePreviewBody(state: NoteEditViewModel.State, modifier: Modifier =
             )
         } else {
             when (state.readMode) {
-                ReadMode.MD -> MarkdownText(
-                    text = state.content,
+                ReadMode.MD -> NoteBodyText(
+                    content = state.content,
                     modifier = Modifier.fillMaxWidth(),
                     fontScale = state.readFontScale,
                 )
@@ -389,7 +427,11 @@ private fun NotePreviewBody(state: NoteEditViewModel.State, modifier: Modifier =
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun FormatToolbar(state: NoteEditViewModel.State, viewModel: NoteEditViewModel) {
+private fun FormatToolbar(
+    state: NoteEditViewModel.State,
+    viewModel: NoteEditViewModel,
+    onPickImage: () -> Unit,
+) {
     val dark = MaterialTheme.colorScheme.surface.luminance() < 0.5f
     val selected = !state.selection.collapsed
 
@@ -430,6 +472,10 @@ private fun FormatToolbar(state: NoteEditViewModel.State, viewModel: NoteEditVie
                     label = { Text(stringResource(size.labelRes())) },
                 )
             }
+            AssistChip(
+                onClick = onPickImage,
+                label = { Text(stringResource(R.string.insert_image)) },
+            )
             MarkupColor.entries.forEach { color ->
                 Box(
                     modifier = Modifier

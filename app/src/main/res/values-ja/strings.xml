@@ -176,7 +176,7 @@
     <string name="delete_this_note">このノートを削除しますか？</string>
     <string name="the_note_goes_to_trash_soft_delete_and_can_be_re">ノートはゴミ箱に入り（ソフト削除）、いつでも復元できます。そこで完全に削除することもできます。</string>
     <string name="body_is_still_empty_tap_the_top_right_to_switch_">本文がまだ空です。右上をタップして編集に戻り、何か書いてみましょう</string>
-    <string name="preview_mode_supports_headings_bold_code_blocks_">プレビューモード · # 見出し、**太字**、`コード`、``` コードブロック、- リスト、> 引用に対応</string>
+    <string name="preview_mode_supports_headings_bold_code_blocks_">プレビュー · # 見出し、**太字**、`コード`、``` コードブロック、- リスト、> 引用、画像に対応</string>
     <string name="notes_2">ノート</string>
     <string name="filter_by_group">グループで絞り込み</string>
     <string name="all_groups">すべてのグループ</string>
@@ -265,4 +265,8 @@
     <string name="color_blue">青藍</string>
     <string name="color_purple">紫</string>
     <string name="read_options">表示設定</string>
+    <string name="insert_image">画像を挿入</string>
+    <string name="image">画像</string>
+    <string name="image_missing">画像が見つかりません：%1$s</string>
+    <string name="image_insert_failed">画像を読み込めませんでした</string>
 </resources>

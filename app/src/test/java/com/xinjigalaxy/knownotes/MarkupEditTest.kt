@@ -158,4 +158,18 @@ class MarkupEditTest {
         // 索引那一档只去自定义标记：`**粗体**` 经分词后本来就是粗体这个词，不必额外处理
         assertEquals("**粗体**", InlineMarkup.plain("**粗体**"))
     }
+
+    @Test
+    fun imageReferenceIsHandledInSummaryAndIndex() {
+        val source = "看这张：![架构图](img:img_abc123.jpg) 就这样。"
+        // 摘要里显示占位，不显示文件名
+        assertEquals("看这张：[架构图] 就这样。", InlineMarkup.summary(source))
+        // 索引里保留说明文字（能搜到），但不索引文件名
+        assertEquals("看这张：架构图 就这样。", InlineMarkup.plain(source))
+    }
+
+    @Test
+    fun imageWithoutAltFallsBackToPlaceholder() {
+        assertEquals("[图片]", InlineMarkup.summary("![](img:x.jpg)"))
+    }
 }

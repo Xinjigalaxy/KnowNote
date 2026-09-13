@@ -40,4 +40,5 @@ demo-shots/
 #   docs/screenshots/**                 —— README 引用的界面截图（已脱敏）
 
 # 本机验证用的原始截图（只提交 docs/screenshots/ 里的脱敏图）
-shots*/
+# 注意写 shots* 而不是 shots*/ —— 带斜杠只匹配目录，shots180-x.png 这类文件会漏网
+shots*

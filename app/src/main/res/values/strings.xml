@@ -172,7 +172,7 @@
     <string name="delete_this_note">Delete this note?</string>
     <string name="the_note_goes_to_trash_soft_delete_and_can_be_re">The note goes to Trash (soft delete) and can be restored anytime, or permanently deleted there.</string>
     <string name="body_is_still_empty_tap_the_top_right_to_switch_">Body is still empty, tap the top right to switch back to editing and write something</string>
-    <string name="preview_mode_supports_headings_bold_code_blocks_">Preview mode · supports # headings, **bold**, `code`, ``` blocks, - lists, > quotes</string>
+    <string name="preview_mode_supports_headings_bold_code_blocks_">Preview mode · supports # headings, **bold**, `code`, ``` blocks, - lists, > quotes, images</string>
     <string name="notes_2">Notes</string>
     <string name="filter_by_group">Filter by group</string>
     <string name="all_groups">All groups</string>
@@ -268,4 +268,8 @@
     <string name="color_blue">Blue</string>
     <string name="color_purple">Purple</string>
     <string name="read_options">Reading display</string>
+    <string name="insert_image">Insert image</string>
+    <string name="image">Image</string>
+    <string name="image_missing">Image missing: %1$s</string>
+    <string name="image_insert_failed">Could not read that image</string>
 </resources>
