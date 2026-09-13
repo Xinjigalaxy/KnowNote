@@ -40,6 +40,8 @@ class SyncClient(
         key: String,
         lastSyncAt: Long,
         notes: List<SyncNote>,
+        imagesIHave: List<String> = emptyList(),
+        images: List<SyncImage> = emptyList(),
     ): Outcome = withContext(Dispatchers.IO) {
         runCatching {
             val payload = SyncRequest(
@@ -47,6 +49,8 @@ class SyncClient(
                 deviceName = deviceName,
                 lastSyncAt = lastSyncAt,
                 notes = notes,
+                imagesIHave = imagesIHave,
+                images = images,
             ).toJson().toString()
 
             val conn = open(host, port, "/sync", "POST")

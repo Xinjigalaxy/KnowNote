@@ -5,7 +5,9 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.xinjigalaxy.knownotes.data.db.AppDatabase
 import com.xinjigalaxy.knownotes.data.db.FtsSchemaCallback
+import com.xinjigalaxy.knownotes.data.media.ImageStore
 import com.xinjigalaxy.knownotes.data.model.SyncLogEntry
+import com.xinjigalaxy.knownotes.data.prefs.UiPrefs
 import com.xinjigalaxy.knownotes.data.repo.NoteRepository
 import com.xinjigalaxy.knownotes.data.sync.SyncClient
 import com.xinjigalaxy.knownotes.data.sync.SyncCoordinator
@@ -18,6 +20,7 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import org.junit.After
+import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
@@ -44,6 +47,10 @@ class SyncLoopbackTest {
     private lateinit var clientRepo: NoteRepository
     private lateinit var server: SyncServer
     private lateinit var scope: CoroutineScope
+    /** 两台「设备」各持一份内存图片仓库 —— 刻意不共享，才能真正验证协议把图传过去了。 */
+    private lateinit var hostImages: MemoryImageStore
+    private lateinit var clientImages: MemoryImageStore
+    private lateinit var prefs: UiPrefs
 
     @Before
     fun setUp() {
@@ -52,7 +59,10 @@ class SyncLoopbackTest {
         hostRepo = NoteRepository(hostDb, "device-host")
         clientRepo = NoteRepository(clientDb, "device-client")
         scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-        server = SyncServer(hostRepo, SyncEngine(hostRepo), "device-host", "主机测试机")
+        hostImages = MemoryImageStore()
+        clientImages = MemoryImageStore()
+        prefs = UiPrefs(InstrumentationRegistry.getInstrumentation().targetContext)
+        server = SyncServer(hostRepo, SyncEngine(hostRepo), "device-host", "主机测试机", hostImages)
     }
 
     @After
@@ -100,7 +110,7 @@ class SyncLoopbackTest {
         val client = SyncClient("device-client", "从机测试机")
         val clientEngine = SyncEngine(clientRepo)
         // 从机侧走的就是页面上那条路径（SyncCoordinator），日志 / 水位线才会被真的写到
-        val coordinator = SyncCoordinator(clientRepo, clientEngine, client)
+        val coordinator = SyncCoordinator(clientRepo, clientEngine, client, clientImages, prefs)
 
         assertTrue("ping 应当通", runBlocking { client.ping("127.0.0.1", port) })
 
@@ -151,5 +161,86 @@ class SyncLoopbackTest {
 
     private companion object {
         const val KEY = "testkey123"
+    }
+
+    // ---------- 图片同步（v1.9.0）----------
+
+    private fun newCoordinator() = SyncCoordinator(
+        clientRepo,
+        SyncEngine(clientRepo),
+        SyncClient("device-client", "从机测试机"),
+        clientImages,
+        prefs,
+    )
+
+    /** 从机 → 主机：图要真的过去（同名同内容），而且第二次同步不该重复传。 */
+    @Test
+    fun imagesTravelFromClientToHost() {
+        val port = server.start(scope, 0, KEY).getOrThrow()
+        val coordinator = newCoordinator()
+
+        val bytes = ByteArray(48 * 1024) { (it % 251).toByte() }
+        clientImages.put("img_alpha.jpg", bytes)
+        runBlocking { clientRepo.saveNote(null, "带图笔记", "看图：\n\n![图](img:img_alpha.jpg)\n", null, emptyList()) }
+
+        val session = runBlocking { coordinator.syncWith("127.0.0.1", port, KEY) }.getOrThrow()
+        assertEquals("从机应把图推上去", 1, session.imagesPushed)
+        assertEquals(0, session.imagesPulled)
+        assertTrue("主机侧应有这张图", hostImages.names().contains("img_alpha.jpg"))
+        assertArrayEquals(bytes, hostImages.read("img_alpha.jpg"))
+
+        val again = runBlocking { coordinator.syncWith("127.0.0.1", port, KEY) }.getOrThrow()
+        assertEquals("对端已有就不该重复传", 0, again.imagesPushed)
+    }
+
+    /** 主机 → 从机：反方向也要通。 */
+    @Test
+    fun imagesTravelFromHostToClient() {
+        val port = server.start(scope, 0, KEY).getOrThrow()
+        val coordinator = newCoordinator()
+
+        val bytes = ByteArray(32 * 1024) { (it * 7 % 253).toByte() }
+        hostImages.put("img_beta.jpg", bytes)
+        runBlocking { hostRepo.saveNote(null, "主机带图", "看图\n\n![图](img:img_beta.jpg)\n", null, emptyList()) }
+
+        val session = runBlocking { coordinator.syncWith("127.0.0.1", port, KEY) }.getOrThrow()
+        assertEquals("应从主机拉下一张图", 1, session.imagesPulled)
+        assertArrayEquals(bytes, clientImages.read("img_beta.jpg"))
+    }
+
+    /** 图多于一单批上限（6 张）时要自动多轮传完。 */
+    @Test
+    fun manyImagesFinishInSeveralRounds() {
+        val port = server.start(scope, 0, KEY).getOrThrow()
+        val coordinator = newCoordinator()
+
+        repeat(8) { index -> clientImages.put("img_$index.jpg", ByteArray(1024) { index.toByte() }) }
+
+        val session = runBlocking { coordinator.syncWith("127.0.0.1", port, KEY) }.getOrThrow()
+        assertEquals("8 张应全部送达", 8, session.imagesPushed)
+        assertTrue("8 张要跑不止一轮：${session.rounds}", session.rounds >= 2)
+        assertEquals(8, hostImages.names().count { it.startsWith("img_") })
+    }
+
+}
+
+/** 内存版图片仓库：回环测试用，不碰真实文件系统。 */
+private class MemoryImageStore : ImageStore {
+
+    private val files = LinkedHashMap<String, ByteArray>()
+
+    override fun names(): Set<String> = files.keys.toSet()
+
+    override fun read(name: String): ByteArray? = files[name]
+
+    override fun write(name: String, bytes: ByteArray): Boolean =
+        if (files.containsKey(name)) false else {
+            files[name] = bytes
+            true
+        }
+
+    /** 测试里直接放一张图进去（相当于「这台设备本来就有这张图」）。 */
+    fun put(name: String, bytes: ByteArray) {
+        files[name] = bytes
     }
 }

@@ -109,6 +109,36 @@ object NoteImages {
 
     private fun newName(): String = "img_${UUID.randomUUID().toString().take(12)}.jpg"
 
+    /** 本机现有的图片文件名（同步用）。 */
+    fun listNames(context: Context): Set<String> =
+        dir(context).listFiles()?.filter { it.isFile }?.map { it.name }?.toSet() ?: emptySet()
+
+    /** 读图片原始字节（同步发送用）；不存在或读失败返回 null。 */
+    fun readBytes(context: Context, name: String): ByteArray? = runCatching {
+        val file = fileFor(context, name)
+        if (!file.exists()) null else file.readBytes()
+    }.getOrNull()
+
+    /**
+     * 写入一张图片（同步接收用）。
+     *
+     * 已存在就**不覆盖**（对端发来的可能只是它的旧版本；同名文件按内容相同处理即可），
+     * 返回 false 让调用方能统计"实际新增了几张"。
+     */
+    fun writeBytes(context: Context, name: String, bytes: ByteArray): Boolean = runCatching {
+        val target = fileFor(context, name)
+        if (target.exists()) return false
+        dir(context).mkdirs()
+        val tmp = File(target.parentFile, "$name.part")
+        tmp.writeBytes(bytes)
+        if (!tmp.renameTo(target)) {
+            tmp.delete()
+            return false
+        }
+        cache.remove(name)
+        true
+    }.getOrElse { false }
+
     private fun decodeScaled(context: Context, uri: Uri, maxDim: Int): Bitmap? =
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
             // ImageDecoder 会按 EXIF 自动转正，省掉自己读方向那一步

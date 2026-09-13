@@ -131,6 +131,18 @@ class UiPrefs(context: Context) {
         prefs.edit().putFloat(KEY_READ_FONT_SCALE, value).apply()
     }
 
+    /**
+     * 某台对端「已有哪些图片」的缓存，key 用 host:port。
+     *
+     * 只当缓存用：丢了最坏结果是下次同步多传几轮（对端会跳过已有的）。所以放偏好里而不是建表，
+     * 省一次数据库迁移；多台对端各存各的，互不干扰。
+     */
+    fun peerImages(peerKey: String): Set<String>? = prefs.getStringSet("sync_peer_images:$peerKey", null)
+
+    fun savePeerImages(peerKey: String, names: Set<String>) {
+        prefs.edit().putStringSet("sync_peer_images:$peerKey", names).apply()
+    }
+
     /** 阅读页展示方式；没设置过返回 null 交给 ReadMode 取默认值。 */
     fun readModeOrNull(): String? = prefs.getString(KEY_READ_MODE, null)
 
