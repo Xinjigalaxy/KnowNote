@@ -176,7 +176,7 @@
     <string name="delete_this_note">刪除這則筆記？</string>
     <string name="the_note_goes_to_trash_soft_delete_and_can_be_re">筆記會進入回收筒（軟刪除），可隨時還原，也可以在那裡永久清除。</string>
     <string name="body_is_still_empty_tap_the_top_right_to_switch_">內文還是空的，點右上角切回編輯寫點什麼</string>
-    <string name="preview_mode_supports_headings_bold_code_blocks_">預覽模式 · 支援 # 標題、**粗體**、`程式碼`、``` 程式碼區塊、- 清單、> 引用</string>
+    <string name="preview_mode_supports_headings_bold_code_blocks_">預覽模式 · 支援 # 標題、**粗體**、`程式碼`、``` 程式碼區塊、- 清單、> 引用、圖片</string>
     <string name="notes_2">筆記</string>
     <string name="filter_by_group">依群組篩選</string>
     <string name="all_groups">全部分組</string>
@@ -265,4 +265,8 @@
     <string name="color_blue">藍</string>
     <string name="color_purple">紫</string>
     <string name="read_options">閱讀顯示</string>
+    <string name="insert_image">插入圖片</string>
+    <string name="image">圖片</string>
+    <string name="image_missing">圖片已遺失：%1$s</string>
+    <string name="image_insert_failed">這張圖片讀取失敗</string>
 </resources>

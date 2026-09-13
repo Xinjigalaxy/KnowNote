@@ -176,7 +176,7 @@
     <string name="delete_this_note">删除这条知识点？</string>
     <string name="the_note_goes_to_trash_soft_delete_and_can_be_re">笔记会进入回收站（软删除），可随时恢复，也可以在那里彻底清除。</string>
     <string name="body_is_still_empty_tap_the_top_right_to_switch_">正文还是空的，点右上角切回编辑写点什么</string>
-    <string name="preview_mode_supports_headings_bold_code_blocks_">预览模式 · 支持 # 标题、**粗体**、`代码`、``` 代码块、- 列表、> 引用</string>
+    <string name="preview_mode_supports_headings_bold_code_blocks_">预览模式 · 支持 # 标题、**粗体**、`代码`、``` 代码块、- 列表、> 引用、图片</string>
     <string name="notes_2">知识点</string>
     <string name="filter_by_group">按分组筛选</string>
     <string name="all_groups">全部分组</string>
@@ -265,4 +265,8 @@
     <string name="color_blue">蓝</string>
     <string name="color_purple">紫</string>
     <string name="read_options">阅读显示</string>
+    <string name="insert_image">插入图片</string>
+    <string name="image">图片</string>
+    <string name="image_missing">图片已丢失：%1$s</string>
+    <string name="image_insert_failed">这张图片读取失败</string>
 </resources>

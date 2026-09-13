@@ -4,6 +4,7 @@ import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.xinjigalaxy.knownotes.data.media.NoteImages
 import com.xinjigalaxy.knownotes.data.model.Group
 import com.xinjigalaxy.knownotes.data.model.Tag
 import com.xinjigalaxy.knownotes.data.prefs.UiPrefs
@@ -144,6 +145,24 @@ class NoteEditViewModel(
         _state.update {
             it.copy(
                 contentField = TextFieldValue(result.text, TextRange(result.start, result.end)),
+                dirty = true,
+            )
+        }
+    }
+
+    /**
+     * 在光标处插入一张图片的引用。
+     *
+     * 前后各留一个换行：图片要独占整行 —— 插在文字中间时，前后不空行会把整段文字和图片黏在一起。
+     */
+    fun insertImageReference(name: String, alt: String = "") {
+        val field = _state.value.contentField
+        val snippet = "\n![$alt](${NoteImages.SCHEME}$name)\n"
+        val start = field.selection.min
+        val text = field.text.replaceRange(start, field.selection.max, snippet)
+        _state.update {
+            it.copy(
+                contentField = TextFieldValue(text, TextRange(start + snippet.length)),
                 dirty = true,
             )
         }

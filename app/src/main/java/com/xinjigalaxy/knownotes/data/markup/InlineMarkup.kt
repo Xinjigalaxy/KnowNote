@@ -34,6 +34,9 @@ object InlineMarkup {
      * 这里与渲染器**故意不一致**：渲染器对不认识的标记会原样显示（不猜颜色、也不吃掉文字），
      * 而摘要的职责是「能读」，不是忠实呈现语法。正文本身一个字符都没动，想看原样切「文本模式」即可。
      */
+    /** 图片引用：`![说明](img:文件名)`。 */
+    private val IMAGE = Regex("!\\[([^\\]]*)\\]\\(img:[^)\\s]+\\)")
+
     private val STRAY = Regex("</?(?:color|size)(?:=[^<>]*)?>")
 
     /**
@@ -43,8 +46,10 @@ object InlineMarkup {
      * 留下一堆没有开头的 `</color>`。
      */
     fun plain(text: String): String {
-        if (!text.contains('<')) return text
-        return STRAY.replace(PAIR.replace(text) { it.groupValues[2] }, "")
+        if (text.isEmpty()) return text
+        val stripped = if (text.contains('<')) STRAY.replace(PAIR.replace(text) { it.groupValues[2] }, "") else text
+        // 图片路径不是内容，但「说明文字」是 —— 留着它，全文检索才搜得到
+        return IMAGE.replace(stripped) { it.groupValues[1] }
     }
 
     // 标准 Markdown 的行内记号：摘要里也去掉，只留文字
@@ -68,7 +73,10 @@ object InlineMarkup {
      */
     fun summary(text: String): String {
         if (text.isEmpty()) return text
-        var out = plain(text)
+        // 顺序要紧：先在**原文**上把图片换成「[说明]」，再交给 plain 处理其它记号。
+        // 反过来的话 plain 已经先把图片换成说明文字了，这里就再也匹配不到图片。
+        var out = IMAGE.replace(text) { "[" + it.groupValues[1].ifBlank { "图片" } + "]" }
+        out = plain(out)
         out = BOLD_STAR.replace(out) { it.groupValues[1] }
         out = BOLD_UNDER.replace(out) { it.groupValues[1] }
         out = STRIKE.replace(out) { it.groupValues[1] }
