@@ -1,5 +1,6 @@
 package com.xinjigalaxy.knownotes.data.sync
 
+import com.xinjigalaxy.knownotes.data.media.ImageStore
 import com.xinjigalaxy.knownotes.data.model.Note
 import com.xinjigalaxy.knownotes.data.repo.NoteRepository
 
@@ -89,6 +90,42 @@ class SyncEngine(private val repo: NoteRepository) {
             }
         }
         return ApplyResult(inserted = inserted, updated = updated, conflicts = conflicts, skipped = skipped)
+    }
+
+    // ---------- 图片 ----------
+
+    /**
+     * 本机认为对端缺的图片：本机有、对端没有的那些。
+     *
+     * 按文件名排序再截断 —— 顺序确定，多轮传输时每轮拿到的都是"下一批"而不是随机一批，
+     * 也方便测试断言。字节数封顶是防"一次几十兆塞进一个 JSON"。
+     */
+    fun outgoingImages(store: ImageStore, peerHas: Set<String>): List<SyncImage> {
+        val candidates = store.names().filter { it !in peerHas }.sorted()
+        val out = ArrayList<SyncImage>(candidates.size)
+        var bytes = 0
+        for (name in candidates) {
+            if (out.size >= MAX_SYNC_IMAGES) break
+            val data = store.read(name) ?: continue
+            if (bytes + data.size > MAX_SYNC_IMAGE_BYTES && out.isNotEmpty()) break
+            bytes += data.size
+            out += SyncImage(name, data)
+        }
+        return out
+    }
+
+    /**
+     * 落盘收到的图片，返回**真正新增**的张数。
+     *
+     * 已存在的跳过 —— 于是重复同步不会重复计数，也不会用对端的旧版本覆盖本机。
+     */
+    fun applyImages(store: ImageStore, images: List<SyncImage>): Int {
+        var added = 0
+        for (image in images) {
+            if (image.name.isBlank()) continue
+            if (store.write(image.name, image.bytes)) added++
+        }
+        return added
     }
 
     private suspend fun toSyncNote(note: Note) = SyncNote(

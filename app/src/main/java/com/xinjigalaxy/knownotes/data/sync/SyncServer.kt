@@ -1,6 +1,7 @@
 package com.xinjigalaxy.knownotes.data.sync
 
 import com.xinjigalaxy.knownotes.data.model.SyncLogEntry
+import com.xinjigalaxy.knownotes.data.media.ImageStore
 import com.xinjigalaxy.knownotes.data.repo.NoteRepository
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -41,6 +42,7 @@ class SyncServer(
     private val engine: SyncEngine,
     private val deviceId: String,
     private val deviceName: String,
+    private val imageStore: ImageStore,
 ) {
 
     data class Status(
@@ -135,6 +137,11 @@ class SyncServer(
                     }
 
                     val request_ = SyncRequest.fromJson(body)
+
+                    // 图片：先收下从机认为我缺的，再把我这边它缺的挑出来发回去。
+                    // "我缺什么"完全由请求里的 images_i_have 决定 —— 服务端不存任何对端状态。
+                    val imagesReceived = engine.applyImages(imageStore, request_.images)
+                    val outboundImages = engine.outgoingImages(imageStore, request_.imagesIHave.toSet())
                     // 先发：取「本次请求之前」本机的变更。
                     // 顺序不能反 —— 反了就会把从机这次刚推上来的变更再回声给它自己
                     // （虽然幂等不会出错，但计数会虚高、日志也说谎）。回环测试抓的就是这个。
@@ -150,7 +157,8 @@ class SyncServer(
                             pushed = applied.changed,
                             conflicts = applied.conflicts,
                             ok = true,
-                            message = "device ${request_.deviceId.take(8)} connected",
+                            message = "device ${request_.deviceId.take(8)} connected, " +
+                                "images +$imagesReceived/-${outboundImages.size}",
                         )
                     )
                     _status.update { it.copy(servedRequests = it.servedRequests + 1) }
@@ -166,6 +174,9 @@ class SyncServer(
                             notes = outbound,
                             appliedNotes = applied.changed,
                             conflicts = applied.conflicts,
+                            imagesIHave = imageStore.names().toList(),
+                            images = outboundImages,
+                            imagesReceived = imagesReceived,
                         ).toJson(),
                     )
                     return

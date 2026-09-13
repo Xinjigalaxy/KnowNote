@@ -6,6 +6,8 @@ import android.content.Context
 import android.os.Build
 import android.provider.Settings
 import com.xinjigalaxy.knownotes.data.db.AppDatabase
+import com.xinjigalaxy.knownotes.data.media.FileImageStore
+import com.xinjigalaxy.knownotes.data.media.ImageStore
 import com.xinjigalaxy.knownotes.data.export.Exporter
 import com.xinjigalaxy.knownotes.data.prefs.UiPrefs
 import com.xinjigalaxy.knownotes.data.repo.NoteRepository
@@ -51,9 +53,11 @@ class AppContainer(context: Context) {
 
     /** 同步引擎与主机服务挂在**应用级**作用域上：切页面不该把主机服务带下线。 */
     val syncEngine = SyncEngine(repository)
-    val syncServer = SyncServer(repository, syncEngine, deviceId, deviceName)
+    /** 图片的读写口子：同步层不碰 Context，这里注入应用私有目录的实现。 */
+    val imageStore: ImageStore = FileImageStore(appContext)
+    val syncServer = SyncServer(repository, syncEngine, deviceId, deviceName, imageStore)
     val syncClient = SyncClient(deviceId, deviceName)
-    val syncCoordinator = SyncCoordinator(repository, syncEngine, syncClient)
+    val syncCoordinator = SyncCoordinator(repository, syncEngine, syncClient, imageStore, uiPrefs)
 
     fun appScope(): CoroutineScope = scope
 
