@@ -2,59 +2,33 @@
 
 [English](README.en.md) · **中文**
 
-安卓记事本应用：Kotlin + Jetpack Compose + **Material 3**，Room(SQLite) + 全文检索（FTS5/FTS4/LIKE 三级降级），
-MVVM + Repository，局域网同步（一主多从 + **定时自动同步**），另附一个**可以跑在 Termux 上的同步中心**（`server/`，纯 Python 标准库）。
+Android 笔记应用。Kotlin + Jetpack Compose + Material 3，Room(SQLite) 全文检索（FTS5 / FTS4 / LIKE 三级降级），
+MVVM + Repository；多设备在同一局域网内互相同步，另附可跑在 Termux / PC 的同步中心（`server/`，纯 Python 3 标准库）。
 
-应用名 **KnowNote**（中文「碎片笔记」/ 繁體「碎片筆記」），界面支持
-**跟随系统 / 简体中文 / 繁體中文 / English / 日本語**，应用图标为「圆角卡片 + 三条笔记线」剪影，带单色层（Android 13+ 主题图标取色）。
-
-- 包名：`com.xinjigalaxy.knownotes`（debug 变体带 `.debug` 后缀）
-- minSdk 26 / targetSdk 36 / compileSdk 36
-- 主题种子色 `#39C5BB`，可选 Android 12+ 动态取色
-- 界面截图见 `docs/screenshots/`（模拟器 + 演示数据；同步页的密钥 / 设备标识 / 局域网地址已打码）
-
----
-
-## 一、已实现（第一期：核心可用）
-
-| 需求 | 实现 |
+| 项目 | 值 |
 | --- | --- |
-| 笔记 CRUD | 增 / 改 / 软删除（`is_deleted`）/ 恢复；列表长按可删，删除后有「撤销」 |
-| 标签管理 | 增 / 改名 / 删除 / **合并到**；点条目 → **二级页面**看该标签下的笔记（左上返回） |
-| 分组管理 | 增 / 改名 / 删除（可选择「保留笔记」或「一起删除」）/ 上移下移排序；点条目 → **二级页面**看组内笔记 |
-| 全文检索 | FTS5 → FTS4 → LIKE 三级降级；**中文子串命中**；前缀匹配；标签进索引；结果高亮 |
-| 组合筛选 | 关键词 + 多标签 + 分组（全部 / 未分组 / 指定） |
-| 导出 | `.json` / `.csv`（带 BOM）/ `.db`（VACUUM INTO 一致性快照），SAF 保存免存储权限 |
-| 升级兼容 | `user_version` + 增量 `Migration`（`AppDatabase.MIGRATIONS`，1→2→3 全部只用 ALTER / CREATE，不重建表） |
-| 局域网同步 | ✅ 一主多从 + 手动触发：主机内嵌 HTTP 服务（默认 8765），从机填「地址 + 共享密钥」同步；**一次请求双向**（推自己的增量 + 拉主机的增量）；增量靠 `change_log` + 水位线；冲突按 `updated_at` 优先、打平按内容确定性收敛（详见第六节） |
-| 定时自动同步 | ✅ 两条互不依赖的路：**设备侧** WorkManager 周期任务（15 / 30 / 60 / 180 分钟可选；15 分钟是 Android 的下限，省电模式下还可能被推迟），应用不在前台也把变更推给主机；**服务器侧** `server/knownote_hub.py` 按 `interval_seconds` 主动去连各台设备（分钟级可控、不受手机省电策略影响）。同步页可开关、选间隔、看上次结果。**只在局域网里同步**（v1.10.1）：移动数据 / 公网上不启动同步，中心与主机也会拒绝局域网外的来源 |
-| 同步中心（Termux） | ✅ `server/knownote_hub.py`：纯 Python 3 标准库、零依赖，说的就是 App 那套线协议（协议版本 2），所以 App 里填「地址 + 密钥」就能把它当主机用；它自己也会定时轮询设备。SQLite 存笔记（含墓碑）+ `images/` 存图片 + `change_log` 增量 + 同一套冲突裁决；共享密钥认证（常量时间比较）+ 同 IP 连错限流；没设密钥拒绝启动 |
-| 同步日志 | ✅ `sync_log` 表记录每次同步（角色 / 对端 / 拉取 / 推送 / 冲突 / 失败原因），同步页展示、可清空 |
-| 跨设备标识 | ✅ `notes.guid`（唯一索引，v2→v3 迁移用 SQLite 的 `randomblob(16)` 回填老数据）；分组 / 标签跨设备按**名字**对齐，不需要 id 映射表 |
-| 删除的同步 | ✅ 「彻底删除」改为墓碑（`is_purged`）而不是删行 —— 删行的话对端下次同步会把这条笔记推回来 |
-| Markdown 渲染 | ✅ 自研轻量渲染器：标题 / 粗体 / 斜体 / 删除线 / 行内代码 / 代码块 / 列表 / 引用 / 可点链接；编辑页「编辑 ↔ 预览」切换 |
-| 搜索结果高亮 | ✅ 命中词在标题与正文里高亮加粗 |
-| 搜索历史与筛选记忆 | ✅ 搜索历史（同词合并计数、最多 12 条、chip 展示、可单删/清空）；标签与分组筛选写入 SharedPreferences |
-| 回收站 | ✅ 软删除笔记的恢复 / 彻底删除 / 清空（文档 5.1 没列，但软删除没有入口等于变相丢数据） |
-| 设置页 | ✅ 主题模式（跟随系统 / 浅色 / 深色，改完立即整树换肤，不必重建 Activity）、主题色（默认初音绿 / **Android 12+ 动态取色**，低版本置灰并说明原因）、回收站定时清理（WorkManager 每天一次 + 保留天数 7/30/90 + 「立即清理一次」+ 上次清理结果） |
-| 多语言 | ✅ 四语言界面（跟随系统 / 简中 / 繁中 / English / 日本語）：文案全部走 `res/values*`；ViewModel 侧用 `UiMessage`（资源 id + 参数）承载消息，界面再渲染。API 33+ 走系统 per-app language（`LocaleManager` + `locale_config`，与系统设置同步），低版本 `attachBaseContext` 包 Context 后重建 |
-| 应用图标 | ✅ 自适应图标 + **单色层**：monochrome 必须是单色剪影，指向彩色前景的话主题图标模式下会渲染成一块实心方块 |
-| 概览实时统计 | ✅ 「更多」页的在线笔记 / 标签分组 / 回收站 / 变更日志全部是 Room 的 Flow，任何写入自动重算（v1.4.0 修：以前是一次性查询，从回收站子页面回来数字不更新） |
-| 列表展示形态 | ✅ 列表 ↔ 瀑布流（两列 LazyVerticalStaggeredGrid）循环切换并记忆；**笔记页 / 分组页 / 标签页 / 二级页面共用同一份偏好** |
-| 二级页面 | ✅ 分组条目、标签条目点进去是独立页面（`group/{groupId}`、`tag/{tagId}` 路由）：左上返回、标题为分组名或 `#标签名`、常驻本页筛选框、状态行、与笔记页同款的卡片与列表 ↔ 瀑布流切换、点笔记进查看 / 长按进编辑 |
-| 检索范围 | ✅ 检索时可单独勾选 **标题 / 正文 / 标签**，默认全选（一个都不选会自动回到全选）；范围收窄时候选集上限自动放宽，避免「过滤后只剩个位数」 |
-| 检索大小写 | ✅ 索引侧与查询侧统一 `lowercase(Locale.ROOT)`：`Android` / `android` / `GRADLE` 命中同一条；搜索历史也按忽略大小写合并同词 |
-| 阅读显示 | ✅ **字号**五档（小 / 标准 / 大 / 特大 / 超大，整棵 Typography 等比缩放，标题与正文的相对层级不变）；**文字颜色**七种（跟随主题 / 深墨 / 纯黑 / 暖褐 / 墨绿 / 深蓝 / 酒红，各带明暗两套取值） |
-| 阅读页字号 | ✅ 阅读页底部滑块单独调字号（0.8×–1.8×，实时显示换算后的 sp 值）；存的是**倍率**不是绝对值，所以设置页的全局字号改了，这里仍按同一比例走，两处设置不打架 |
-| 阅读模式 | ✅ MD 模式（渲染）/ 文本模式（原样显示，连 `<color>` / `<size>` 标记本身也看得见，方便手改原文） |
-| 行内格式 | ✅ 编辑器**选中文字**后可加：**粗体** / *斜体* / 三档字号 / 六色（红黄绿青蓝紫）。标记存进纯文本正文：`<color=red>…</color>`、`<size=1.25>…</size>`；字号是**相对倍率**（em），因此能与阅读页滑块叠加；每种颜色都有明暗两套取值 |
-| 正文插入图片 | ✅ 编辑器工具栏「插入图片」调系统相册选择器（**免读相册权限**）；图片拷进应用私有目录（等比缩到 1600px 内、重编码 JPEG，渲染时按需降采样 + 内存缓存），正文只存文件名 `![说明](img:文件名)`；渲染按「文字段 / 图片块」分块，图片**独占整行、按宽度铺满** —— 行内穿插的也一样单独成行；卡片摘要显示 `[说明]` 占位，全文索引保留说明文字 |
-| 数据迁移 | ✅ `user_version` 1→2（新增 `search_history`）、2→3（`guid` + `is_purged` + `sync_log`）真实迁移 + `MigrationTest` 对着 schema JSON 逐版本校验，含 1→3 跨级路径 |
+| 包名 | `com.xinjigalaxy.knownotes`（debug 变体带 `.debug` 后缀） |
+| SDK | minSdk 26 / targetSdk 36 / compileSdk 36 |
+| 界面语言 | 跟随系统 / 简体中文 / 繁體中文 / English / 日本語 |
+| 主题 | 种子色 `#39C5BB`，支持 Android 12+ 动态取色 |
+| 同步协议 | **3**（App 与中心须同版本升级） |
 
-界面页：笔记列表（常驻搜索框 + 标签 chips + 状态行）、笔记编辑（编辑/预览）、回收站、分组管理、标签管理、二级页面（分组内 / 标签内笔记）、更多（数据库概览）、导出、局域网同步。
-底部导航 4 个条目：笔记 / 分组 / 标签 / 更多。
+## 项目简介
 
-交互约定：列表里**点击 = 查看**（Markdown 预览），**长按 = 编辑**；新建走右下角「记一条」。
+本地优先的安卓笔记应用：笔记、标签、分组、Markdown 渲染、全文检索、正文插图、回收站全部离线可用。
+同步走局域网内的内嵌 HTTP 服务，无需账号、无需云端；可选装一个纯 Python 3 标准库实现的同步中心，
+把定时调度放到常驻机器上。
+
+## 核心特点
+
+- **本地优先**：数据存在应用私有目录，无账号、无上游服务
+- **检索三级降级**：FTS5 → FTS4 → LIKE，按系统 SQLite 能力自动选择，生效引擎可见
+- **中文子串命中**：写入时 CJK 逐字切分、查询时组 phrase，不依赖 jieba
+- **双向库存比对同步**：按「两边各有什么」算差集，不依赖水位线；正文只在被点名时传输
+- **同步中心**：零依赖零编译，可当主机、也可主动轮询各设备
+- **仅局域网**：从机、主机、中心三处均在唯一出入口拦截非局域网来源
+- **可调阅读**：字号五档、文字颜色七种、行内格式（粗体 / 斜体 / 字号 / 六色）、正文插图
+- **四语言 + Material 3**：动态取色、深浅主题、per-app language
 
 ## 界面
 
@@ -68,34 +42,88 @@ MVVM + Repository，局域网同步（一主多从 + **定时自动同步**）�
 <a href="docs/screenshots/08-settings-dark.png"><img src="docs/screenshots/08-settings-dark.png" width="200" alt="深色主题"></a>
 <a href="docs/screenshots/10-english-settings.png"><img src="docs/screenshots/10-english-settings.png" width="200" alt="英文界面"></a>
 
-截图取自模拟器 + 演示数据；同步页的共享密钥、设备标识与局域网地址已做打码（见 `docs/screenshots/09-sync.png`）。
+截图取自模拟器与演示数据；同步页的共享密钥、设备标识、局域网地址已打码。
 
-## 二、构建与运行
+## 主要功能
+
+### 笔记
+
+- 增 / 改 / 软删除 / 恢复 / 彻底删除（墓碑）；列表长按删除后可撤销
+- Markdown 渲染：标题 / 粗体 / 斜体 / 删除线 / 行内代码 / 代码块 / 列表 / 引用 / 可点链接；编辑 ↔ 预览切换
+- 交互：点击 = 查看，长按 = 编辑，右下角新建
+- 正文插图：相册选择（免读相册权限）→ 拷入私有目录（1600px 内等比缩放、JPEG 重编码）→ 正文存 `![说明](img:文件名)`；图片独占整行
+- 列表 ↔ 瀑布流切换，笔记页 / 分组页 / 标签页 / 二级页面共用同一偏好
+
+### 检索
+
+- 引擎：FTS5 → FTS4 → LIKE 三级降级；中文子串命中、前缀匹配、标签进索引、结果高亮
+- 范围：可单独勾选 标题 / 正文 / 标签，默认全选（全不选时回到全选）
+- 组合：关键词 + 多标签 + 分组（全部 / 未分组 / 指定）
+- 大小写：索引侧与查询侧统一 `lowercase(Locale.ROOT)`，搜索历史同词合并
+- 搜索历史最多 12 条，可单删 / 清空；筛选条件写入 SharedPreferences
+- 索引条数与在线笔记数不一致时自动整体重建
+
+### 组织
+
+- 标签：增 / 改名 / 删除 / 合并到；条目点击进二级页面
+- 分组：增 / 改名 / 删除（保留笔记或一起删除）/ 上移下移排序；条目点击进二级页面
+- 二级页面：`group/{groupId}`、`tag/{tagId}` 路由，常驻本页筛选框、状态行、与笔记页同款卡片
+- 回收站：恢复 / 彻底删除 / 清空；定时清理（WorkManager 每天一次，保留 7 / 30 / 90 天）
+
+### 同步
+
+- 一主多从：主机内嵌 HTTP 服务（默认 8765），从机填「地址 + 共享密钥」；一次请求双向
+- 定时两条路：设备侧 WorkManager（15 / 30 / 60 / 180 分钟）、服务器侧中心主动轮询
+- 同步日志：`sync_log` 记录角色 / 对端 / 拉取 / 推送 / 冲突 / 失败原因，同步页展示并可清空
+- 跨设备标识：`notes.guid`；分组与标签按名字对齐，不需要 id 映射表
+- 删除传播：彻底删除改为墓碑（`is_purged`），否则对端会把笔记推回来
+
+### 外观与设置
+
+- 主题模式跟随系统 / 浅色 / 深色，切换立即整树换肤；动态取色（Android 12+，低版本置灰并说明）
+- 阅读字号五档（整棵 Typography 等比缩放）、文字颜色七种；阅读页底部滑块单独调字号（0.8×–1.8×，倍率制）
+- 阅读模式 MD / 文本切换（文本模式显示 `<color>` / `<size>` 标记原文）
+- 编辑器选中文字可加粗体 / 斜体 / 三档字号 / 六色，标记存进纯文本正文
+- 多语言：API 33+ 走系统 per-app language，低版本包 `Configuration`
+
+### 工程
+
+- 数据库 `user_version` 1→2→3 增量迁移（全部 ALTER / CREATE，不重建表），`MigrationTest` 对着 schema JSON 校验
+- 导出 `.json` / `.csv`（带 BOM）/ `.db`（`VACUUM INTO` 一致性快照），SAF 保存免存储权限
+- 「更多」页概览统计走 Room Flow，任何写入自动重算
+- 应用图标为自适应图标 + 单色层（Android 13+ 主题图标取色）
+
+## 快速开始
+
+| 项目 | 说明 |
+| --- | --- |
+| 系统要求 | Android 8.0（API 26）或更高 |
+| 构建环境 | JDK 17 + Android SDK；`local.properties` 指向本机 SDK 路径（不入库） |
+| 安装 | 从 [Releases](../../releases) 下载 APK，或 `./gradlew :app:installDebug` |
+| 同步中心 | `server/knownote_hub.py`，只用 Python 3 标准库 |
+| 演示数据 | `tools/seed-demo-db.py`（可选，8 条示例） |
 
 ```bash
-# 环境：JDK 17 + Android SDK（local.properties 指向本机 SDK 路径，不入库）
-export JAVA_HOME="D:\\app\\java17"
-./gradlew :app:assembleDebug          # 产物 app/build/outputs/apk/debug/app-debug.apk
-./gradlew :app:installDebug           # 装到已连接设备
-./gradlew :app:testDebugUnitTest      # 纯 JVM 单测（62 例）
-./gradlew :app:connectedDebugAndroidTest  # 仪器化测试（57 例，需要设备/模拟器）
+export JAVA_HOME="/path/to/jdk17"
+./gradlew :app:assembleDebug               # 产物 app/build/outputs/apk/debug/app-debug.apk
+./gradlew :app:installDebug                # 装到已连接设备
+./gradlew :app:testDebugUnitTest           # JVM 单测（62 例）
+./gradlew :app:connectedDebugAndroidTest   # 仪器化测试（57 例，需要设备 / 模拟器）
 
-# 同步中心（Termux / PC 上的服务端，只用 Python 3 标准库，不需要任何依赖）
-python -m unittest discover -s server/tests -t .   # 中心测试 41 例（真 socket）
+python -m unittest discover -s server/tests -t .                   # 同步中心测试（50 例，真 socket）
 python server/knownote_hub.py --init-config server/hub.conf.json   # 生成配置（含随机密钥）
-python server/knownote_hub.py --config server/hub.conf.json        # 跑起来（同时定时轮询设备）
+python server/knownote_hub.py --config server/hub.conf.json        # 启动（同时定时轮询设备）
 ```
 
-> **注意**：wrapper 的 `distributionUrl` 指向华为镜像
-> `https://mirrors.huaweicloud.com/gradle/gradle-8.13-bin.zip`。
-> `services.gradle.org` 在国内直连会超时，导致 `gradle wrapper` 报
-> “Test of distribution url ... failed”。要重新生成时用：
-> `gradle wrapper --gradle-distribution-url https://mirrors.huaweicloud.com/gradle/gradle-8.13-bin.zip`
+Gradle wrapper 的 `distributionUrl` 指向华为镜像：`services.gradle.org` 国内直连超时。重新生成时：
+
+```bash
+gradle wrapper --gradle-distribution-url https://mirrors.huaweicloud.com/gradle/gradle-8.13-bin.zip
+```
 
 ### 灌演示数据（可选）
 
-`tools/seed-demo-db.py` 直接往 SQLite 文件里写 8 条示例知识点。
-Room 用 WAL 模式，**必须连 `-wal` 一起取回**再本地 checkpoint：
+`tools/seed-demo-db.py` 直接写 SQLite 文件。Room 使用 WAL 模式，取库时必须连 `-wal` 一起取回并 checkpoint：
 
 ```bash
 PKG=com.xinjigalaxy.knownotes.debug
@@ -110,432 +138,292 @@ adb shell run-as $PKG rm -f databases/knownotes.db-wal databases/knownotes.db-sh
 adb shell run-as $PKG cp /data/local/tmp/knownote-seed.db databases/knownotes.db
 ```
 
-脚本刻意不写 FTS 索引表，App 下次启动时会因条数不一致**自动重建**（`FtsStore.repair()`）。
+脚本不写 FTS 索引表，App 下次启动按条数不一致自动重建（`FtsStore.repair()`）。
 
-## 三、代码地图
+## 代码地图
 
 ```
-data/model/Entities.kt      notes / tags / groups / note_tags / sync_meta / change_log / search_history / sync_log
-data/db/AppDatabase.kt      8 张实体表（v3）；FtsSchemaCallback 挂 FTS 建表与自愈；MIGRATION_1_2 / 2_3
-data/db/NoteDao.kt          笔记 CRUD、软删除、墓碑、LIKE 兜底、分组/标签计数
-data/db/MetaDaos.kt         标签（含合并）、分组（含排序）、变更日志、同步元数据、同步日志
-data/db/FtsStore.kt         虚拟表 DDL / 引擎探测 / MATCH 查询 / 索引重建
-data/fts/FtsText.kt         分词与 MATCH 表达式构造（中文子串检索的关键）
-data/repo/NoteRepository.kt 唯一写入口：事务内同时改主表 + 关联 + FTS 索引 + 变更日志
-data/export/Exporter.kt     JSON / CSV / SQLite 三种导出
-data/sync/SyncModels.kt     线格式（SyncNote / SyncRequest / SyncResponse）+ JSON 编解码
-data/sync/SyncEngine.kt     收集本地增量 + 应用远端变更（时间戳优先 / 打平的确定性收敛）
-data/sync/SyncServer.kt     主机侧手写 HTTP 服务（ServerSocket，无第三方依赖）+ 局域网地址枚举
-data/sync/SyncClient.kt     从机侧 HttpURLConnection 客户端 + 地址解析
-data/sync/SyncCoordinator.kt 一次「从机同步会话」：取增量 → 发送 → 落库 → 水位线 → 日志（会话串行闸）
-data/sync/AutoSync.kt       定时自动同步：WorkManager 周期任务 + AutoSyncScheduler（排 / 撤）
-data/sync/LanGuard.kt       局域网边界：只在局域网里同步（地址分类 + 网络类型判定，可注入给测试）
-server/knownote_hub.py      同步中心：协议 v3 主机端 + 定时轮询设备 + SQLite / 图片 / 变更日志（Termux 可跑）
-server/start-hub.sh         Termux 启动脚本（wake-lock / 后台 / check / status）
-server/tests/test_hub.py    同步中心的测试（真实 socket：协议 / 冲突收敛 / 图片 / 调度 / 局域网限制，41 例）
-ui/…                        Compose 页面 + ViewModel（AppViewModelProvider 手工装配）
-ui/components/UiMessage.kt  ViewModel 侧可本地化消息（资源 id + 参数），界面负责渲染
+data/model/Entities.kt       notes / tags / groups / note_tags / sync_meta / change_log / search_history / sync_log
+data/db/AppDatabase.kt       8 张实体表（v3）；FtsSchemaCallback 挂 FTS 建表与自愈；MIGRATION_1_2 / 2_3
+data/db/NoteDao.kt           笔记 CRUD、软删除、墓碑、LIKE 兜底、分组 / 标签计数
+data/db/MetaDaos.kt          标签（含合并）、分组（含排序）、变更日志、同步元数据、同步日志
+data/db/FtsStore.kt          虚拟表 DDL / 引擎探测 / MATCH 查询 / 索引重建
+data/fts/FtsText.kt          分词与 MATCH 表达式构造
+data/repo/NoteRepository.kt  唯一写入口：事务内同时改主表 + 关联 + FTS 索引 + 变更日志
+data/export/Exporter.kt      JSON / CSV / SQLite 三种导出
+data/sync/SyncModels.kt      线格式 + JSON 编解码
+data/sync/SyncDiff.kt        库存比对的纯函数（协议 3 差集）
+data/sync/SyncEngine.kt      本机库存 / 增量，应用远端变更
+data/sync/SyncServer.kt      主机侧手写 HTTP 服务（ServerSocket）+ 局域网地址枚举
+data/sync/SyncClient.kt      从机侧 HttpURLConnection 客户端 + 地址解析
+data/sync/SyncCoordinator.kt 一次同步会话：比差集 → 传正文 → 落库 → 日志（串行闸）
+data/sync/AutoSync.kt        定时自动同步：WorkManager 周期任务 + 排 / 撤
+data/sync/LanGuard.kt        局域网边界：地址分类 + 网络类型判定（可注入给测试）
+server/knownote_hub.py       同步中心：协议 3 主机端 + 定时轮询设备 + SQLite / 图片
+server/start-hub.sh          Termux 启动脚本（后台 / wake-lock / check / status / log）
+server/tests/test_hub.py     同步中心测试（真实 socket，50 例）
+ui/…                         Compose 页面 + ViewModel（AppViewModelProvider 手工装配）
+ui/components/UiMessage.kt   ViewModel 侧可本地化消息（资源 id + 参数）
 data/settings/AppSettings.kt 应用设置（主题 / 动态取色 / 回收站清理 / 语言），StateFlow 承载
-data/settings/AppLocales.kt  语言落地：33+ 交系统 LocaleManager，低版本包 Configuration
-data/settings/AppLanguage.kt 语言枚举（跟随系统 / 简中 / 繁中 / 英 / 日）
+data/settings/AppLocales.kt  语言落地：API 33+ 交系统 LocaleManager，低版本包 Configuration
 res/values{,-zh,-zh-rTW,-ja}/strings.xml  四语言文案
-tools/                      辅助脚本：i18n 抽取与修复、截图打码、演示数据灌库
+tools/                      辅助脚本：i18n 抽取与修复、截图打码、演示数据灌库、历史脱敏
 ```
 
-## 四、两个必须知道的 Android 平台坑（都已在真机上实测确认）
+## Android 平台要点
 
-### 1. Android 系统 SQLite 没有 FTS5
-
-最初选型是 FTS5，但 **Android 自带的 SQLite 不保证编译 FTS5**。
-模拟器 Android 15（API 35，SQLite 3.44.3）实测：
+**系统 SQLite 不含 FTS5。** Android 15（SQLite 3.44.3）实测：
 
 ```
 sqlite=3.44.3 | FTS5=no such module: fts5 (code 1 SQLITE_ERROR) | FTS4=OK
 ```
 
-因此实现改成**能力探测 + 三级降级**：FTS5 → FTS4 → LIKE，并把当前生效引擎显示在
-列表状态行与「更多」页，检索降级不会静默发生。
+因此实现为能力探测 + 三级降级，并把生效引擎显示在列表状态行与「更多」页。
 
-顺带踩到的一个坑：**不能用 `CREATE VIRTUAL TABLE IF NOT EXISTS ... USING fts5` 探测模块是否可用**
-——当同名表已存在（比如上一轮建成了 FTS4）时 SQLite 会跳过模块加载直接返回成功，
-于是引擎被误判成 FTS5，再去用 FTS4 不支持的 `bm25()` 就会**一条都搜不到**。
-现在改为先读 `sqlite_master` 里 `notes_fts` 的真实 DDL，再决定引擎。
+探测不能用 `CREATE VIRTUAL TABLE IF NOT EXISTS ... USING fts5`：同名表已存在时 SQLite 会跳过模块加载直接成功，
+引擎被误判为 FTS5，再用 FTS4 不支持的 `bm25()` 会一条都搜不到。改为先读 `sqlite_master` 里 `notes_fts` 的真实 DDL。
 
-### 2. FTS4 的标准查询语法不支持显式 `AND`
+**FTS4 不支持显式 `AND`。** 未编译 `SQLITE_ENABLE_FTS3_PARENTHESIS` 时 `AND` 被当作普通词元，
+`"检 索" AND "零 碎"` 永远无结果。统一使用空格隐式 AND（`"检 索" "零 碎"`），FTS4 / FTS5 均支持。
 
-未编译 `SQLITE_ENABLE_FTS3_PARENTHESIS` 时，`AND` 会被当作普通词元，
-`"检 索" AND "零 碎"` 永远搜不到东西。现在统一用**空格隐式 AND**
-（`"检 索" "零 碎"`），FTS4 与 FTS5 都支持。
+**中文分词策略（`FtsText`）。** unicode61 与 simple 都把连续汉字视为一个 token，「检索」搜不到「全文检索」，只有前缀匹配有效。
 
-### 3. 中文分词策略（`FtsText`）
+- 写入索引前：CJK 逐字拆开（`全文检索` → `全 文 检 索`），拉丁词保持整词并小写
+- 查询时：连续 CJK 组 phrase（`"检 索"`，位置相邻即子串命中），拉丁词用前缀（`sql*`）
+- 索引存分词副本，展示与导出永远用主表原文
 
-unicode61 与 simple 分词器都把**连续汉字当成一个 token**，于是「检索」搜不到「全文检索」，
-只有前缀匹配有效。解决办法不依赖 jieba：
+**不要用 `sqlite_master` 判断虚拟表是否存在（v1.0.0 的实际 bug）。** Room 建库时会连续回调 `onCreate` 与 `onOpen`，
+`FtsStore.create()` 被调用两次；SQLite 3.32（Android 12 / 13）上第二次查询拿不到 DDL，于是误判「表不存在」→
+重试建 FTS5 / FTS4 均报 `table notes_fts already exists` → 已建好的引擎被降级为 NONE，检索退化为 LIKE。
 
-- **写入索引前**：CJK 逐字拆开（`全文检索` → `全 文 检 索`），拉丁词保持整词并小写
-- **查询时**：连续 CJK 组成 phrase（`"检 索"`，位置相邻 ⇒ 子串命中），拉丁词用前缀（`sql*`）
-- 索引里存的是分词副本，展示与导出永远用主表原文
+v1.0.1 的修法：
 
-索引条数与在线笔记数不一致时（升级、异常退出、外部灌库）自动整体重建。
+- 表已存在时用 `MATCH` 判断模块可用性，用 `bm25()` 是否存在区分 FTS5 / FTS4
+- 模块可用性探测走 `temp.` 临时表，不拿真表名试错
+- `create()` 幂等：第二次调用不得改变第一次的结论（回归测试 `repeatedProbeMustNotDowngradeTheEngine`）
+- 索引条数与在线笔记数不一致即整体重建，覆盖升级 / 崩溃 / 外部灌库
 
-### 4. 千万别靠 `sqlite_master` 判断"虚拟表是否已存在"（v1.0.0 的实际 bug）
+## 局域网同步
 
-Room 新建库时会**连续回调 `onCreate` 和 `onOpen`**，也就是同一个库里 `FtsStore.create()` 会被调用两次。
-v1.0.0 在第二次调用时去 `sqlite_master` 里找已有表：
+### 拓扑与协议
 
-```kotlin
-// ❌ v1.0.0 的写法
-val ddl = db.query("SELECT sql FROM sqlite_master WHERE type='table' AND name=?", arrayOf("notes_fts"))
-if (ddl == null) { /* 去建表 —— 但表其实已经存在 */ }
-```
-
-在 SQLite 3.32（Android 12 / 13）上这次查询拿不到值，于是：
-
-1. 误判成"表不存在" → 重试建 FTS5 → 报 `table notes_fts already exists`
-2. 再试 FTS4 → 同样 `already exists`
-3. **已经建好的引擎被降级成 NONE，检索退化为 LIKE**
-
-实测复现（Android 13 / SQLite 3.32.2 模拟器）：
-
-```
-W KnowNote: 全文检索引擎 FTS5 不可用: table notes_fts already exists ...
-W KnowNote: 全文检索引擎 FTS4 不可用: table notes_fts already exists ...
-```
-
-**v1.0.1 的修法：完全按行为判定，不解析 DDL 文本，且探测/建表必须幂等**
-
-- 表已存在 → 用 `MATCH` 能不能过判断"模块在不在"，再用 `bm25()` 是否存在区分 FTS5 / FTS4
-- 模块可用性探测走 `temp.` 临时表，**绝不拿真表名试错**（失败的 CREATE 在部分版本会留下同名残留）
-- `create()` 可重复调用，第二次不得改变第一次的结论（回归测试 `repeatedProbeMustNotDowngradeTheEngine` 守住）
-- 索引条数与在线笔记数不一致就整体重建，兜住升级 / 崩溃 / 外部灌库等各种状态
-
-> 诚实说明：3.32 上"第一次建好的表为何没落盘"的 SQLite 内部原因我没能完全钉死（同连接立刻查
-> `sqlite_master` 在两版 SQLite 上都是可见的）。但 v1.0.1 已不依赖任何这些假设 ——
-> 不解析 DDL、不重试建表、模块探测隔离在 temp、条数不符即重建，所以各种中间状态都能收敛。
-
-## 五、验证记录
-
-| 检查项 | 结果 |
-| --- | --- |
-| `:app:assembleDebug` / `assembleRelease` | BUILD SUCCESSFUL |
-| 单元测试 | 55/55 通过（`FtsTextTest` 8 / `MarkdownMarkupTest` 10 / `MarkupEditTest` 22 / `NoteBlocksTest` 7 / `SearchScopeTest` 8） |
-| 仪器化测试（Android 13 / SQLite 3.32.2，与真机同版本） | 47/47 通过（`tests="47" failures="0" errors="0"`；v1.9.0 时是 40 例） |
-| 仪器化测试（Android 15 / SQLite 3.44.3） | 47/47 通过 |
-| 设置与统计测试 `SettingsAndStatsTest` | 4/4：概览统计**真的会随操作推送新值**（订阅 flow 记录每次发射，而不是每次重查一遍）、定时清理只清够老的那条且留墓碑、保留期清理整空、设置读写往返 |
-| 同步引擎测试 `SyncEngineTest` | 8/8：远端新建（分组按名字建 / 标签关联）、时间戳优先、**打平收敛**（两台设备互相同步后内容相同）、软删与墓碑传播、本地彻底删除留墓碑并可同步出去、增量取数、主机中转记日志而从机不记、本机无该条时忽略墓碑 |
-| 同步真回环测试 `SyncLoopbackTest` | 3/3：**真 ServerSocket + 真 HttpURLConnection、两个独立库**跑双向同步（拉 4 推 1 再同步幂等）、错密钥 401 且错误原因透出、无密钥拒绝启动 |
-| 迁移测试 `MigrationTest` | 3/3：1→2（`search_history`）、2→3（`guid` 回填 32 位十六进制且互不相同、`is_purged` 默认 0、`sync_log` 可写、**拿重复 guid 插入必须被唯一索引拒绝**）、1→3 跨级路径；三步都对 schema JSON 校验 |
-| 编辑页测试 `NoteEditViewModelTest` | 7/7（含「输入框待确认标签必须入库」「只看不改返回不刷新 updated_at」两个回归） |
-| APK 元信息 | minSdk 26 / targetSdk 36 / 标签「KnowNote / 碎片笔记」 |
-| Room schema 导出 | `app/schemas/…/1.json`、`2.json`、`3.json` |
-| 真机检索（Android 13 真机） | 中文子串「检索」命中 2 条、前缀 `gradle*` 命中 1 条、多词元 AND 命中正确 |
-| 索引自愈 | 灌库时索引 0 条 → 启动后 8 条，与在线笔记数一致 |
-| **升级路径自愈（Android 13 / SQLite 3.32.2）** | v1.0.0 造出降级状态 → 覆盖装 v1.0.1 → 引擎恢复 FTS4，`FTS 索引条数对不上（0 → 8），已整体重建`，MATCH 查询全部命中 |
-| **真机迁移（Android 13 真机，原有 3 条笔记）** | 覆盖装 v1.1.0 → `user_version` 1 升 2、`search_history` 建出、3 条笔记与索引全部保留 |
-| **真机二级页面（Android 13 真机 / v1.2.1）** | 分组条目、标签条目点进去都是独立页面：左上「返回」按钮、标题为分组名、本页筛选框、状态行「共 3 条笔记」、与笔记页同款卡片；两页的列表 ↔ 瀑布流切换都生效；页内点笔记直接进「查看」预览；返回链路（笔记 → 二级页面 → 上级列表）逐级正确 |
-| **真机回归：只看不改不刷新时间（Android 13 真机 / v1.2.1）** | 点开笔记 → 直接返回，列表里三条笔记的时间文字与点开前 **完全一致**（修复前会被无条件保存刷成「刚刚」） |
-| **真机迁移 v2→v3（Android 13 真机，原有 3 条笔记 / v1.3.0）** | 覆盖装 v1.3.0 → `user_version` 2 升 3；`guid` 回填 **3/3 且唯一**（32 位十六进制，SQLite `randomblob(16)`）、`is_purged` 默认 0、`sync_log` 建出；3 条笔记与 FTS 索引全部完好 |
-| **真机同步·主机侧（Android 13 真机 / v1.3.0）** | 开启主机后从 PC 直连真机接口：`GET /ping` → 200 `{"protocol":1,"device_name":"<真机型号>"}`；错密钥 `POST /sync` → **401 共享密钥不匹配**；正确密钥推一条笔记 → 200（主机落库 1 条，并把 3 条真实笔记回给从机）。落库后：笔记数 3→4、分组「PC 测试分组」与标签「同步测试」按名字自动建出、FTS 索引 4 条、`sync_log` 记 `host | PC 侧测试 | 拉=3 推=1` |
-| **真机同步·App ↔ App（真机当主机 / Android 13 模拟器当从机）** | 模拟器同步 → 拉到 4 条全部落库（含 PC 推的那条），分组 / 标签名字对齐、水位线写入 `sync_meta`；从机新建笔记后再次同步 → 「推过去 1 条，主机落库 1 条」，主机笔记数 3→5；第三次同步两边均无增量（水位线幂等） |
-| **真机同步·日志（两侧）** | 主机侧 `host` 5 条、从机侧 `client` 4 条，字段（对端 / 拉取 / 推送 / 结果）逐条对得上实际行为 |
-| **真机回归：概览实时更新（Android 13 真机 / v1.4.0）** | 长按笔记删除 → 「更多」页**立刻**显示 回收站 1 / 在线笔记 5→4 / 变更日志 +1，副标题变「1 条已删除笔记」；进回收站彻底删除 → 返回「更多」**计数自动变回 0**（修复前这里一直是旧数字）；库层面确认墓碑仍在（`is_purged=1`，为了同步），只是不再计入任何统计 |
-| **真机主题与设置（Android 13 真机 / v1.4.0）** | 设置页「深色」选中后整个应用立即换肤（设置页与笔记页均为深色，未重建 Activity）；打开动态取色后配色明显变为壁纸取色（本机壁纸给出暖褐/红调）；「关于」显示 `1.4.0-demo`（版本号已改为读包信息）；回收站为空时「立即清理一次」正确置灰 |
-
-### v1.5.0 真机验证（多语言与图标）
-
-| 检查项 | 结果 |
-| --- | --- |
-| 语言切换（Android 13 真机，API 33） | 设置页五选一：点 **English** 后整树变英文，系统侧同步为 `Locales for …debug are [en]`；点「跟随系统」回到 `[]`（走 `LocaleManager`） |
-| 应用名三语言 | 从 APK 读：`application-label:'KnowNote'`、`application-label-zh:'碎片笔记'`、`application-label-zh-TW:'碎片筆記'`，其余语言回落品牌名 |
-| 设置共存 | 切换语言后主题模式 / 动态取色 / 回收站清理设置全部保留（设置在 `AppSettings`，语言只影响资源解析） |
-| **真机发现并修复的插值 bug** | 切日语后设置页显示 `$days 日`、`${state.trashCount} 件` —— 抽取脚本只把**中文原文**的插值转成了 `%1$s`，四语言**译文**里的 `${...}` 却原样写进了资源，而 Android 资源不做模板展开。修法（`tools/i18n-fix-args.py`）：按**表达式文本**对齐编号而非出现顺序，日语把参数提到句首仍然正确（`同期完了：%1$s 件取得、この端末で %2$s 件反映`）。修后真机复验：日语 `0 件 / 7 日 / 前回のクリーンアップ 33 分前、0 件を削除`，英文 `0 items / 7 days / Last cleanup 33 minutes ago, removed 0` |
-| 图标单色层 | 修前 monochrome 指向彩色前景，主题图标模式下是一块实心方块；改为单色剪影后跟随系统取色 |
-
-### v1.10.0 验证（定时自动同步 + Termux 同步中心）
-
-设备侧（App）与服务器侧（`server/knownote_hub.py`）分别验证，最后合到一条链上跑通。
-
-| 检查项 | 结果 |
-| --- | --- |
-| 纯 JVM 单测 | 55/55 通过（本版改动集中在 Android 侧，未新增 JVM 单测） |
-| 仪器化测试（Android 13 / SQLite 3.32.2 模拟器） | **47/47** 通过（v1.9.0 是 40 例，本版新增 `AutoSyncTest` 7 例） |
-| 仪器化测试（Android 15 / SQLite 3.44.3 模拟器） | **47/47** 通过 |
-| `AutoSyncTest` | 7/7：关闭开关时什么都不做；**自动同步真的把中心上的笔记拉到本机**（真 ServerSocket + 真 HttpURLConnection）并写下「上次自动同步」；本机改动推上中心；地址没填 / 密钥没设时返回 success 而不是 failure（见 6.7 的坑）；中心没开机时返回 retry 并记下原因；密钥不对时把 401 的原因透出来；`AutoSyncScheduler` 真的排上 / 撤掉唯一周期任务 |
-| 同步中心测试 `server/tests/test_hub.py` | **50/50** 通过：协议层（真 HTTP 服务 + 真客户端：401 / 404 / 429 节流 / 坏 JSON / 协议版本）、引擎层（增量、冲突收敛、墓碑、图片只传一次、多轮）、调度层（`poll_device` 真连设备：双向、幂等、失败原因、水位线取 min）、**库存差分（新对端拿全库、水位线推进后照样全推、只传真差集、只比指纹的纯逻辑、墓碑不请求、跨实现哈希固定值）**、设备状态落库、局域网限制（公网来源与代理头里的公网真身一律 403 且不改动数据、私有来源放行、`bind` 公网地址拒绝启动） |
-| 跨实现①：**中心主动拉 App**（PC 上跑中心 / Android 13 模拟器跑 App） | 模拟器开启主机模式后，中心 `--check` 探测到 `✓ 通（对端自称 Android 模拟器，协议 2）`；`--once` 一轮把 App 侧的 **8 条笔记拉回中心**、把中心的 **2 条推给 App**（`拉 8 / 推 2 落库，冲突 0`）。回读 App 库：8 → **10 条**，其中「中心上的笔记 A/B」两条分组 / 标签都按名字对齐 |
-| 跨实现②：**App 主动同步中心**（点开「定时自动同步」开关） | 在 PC 侧中心新建第 3 条笔记后，点开开关 → 中心日志 `[host] … 接入：给它 11 条 / 它推来 0 条落库`，App 库 10 → **11 条**且新笔记在位；界面上「上次自动同步 刚刚 · 成功」。**幂等性顺带验到**：App 把 10 条推过去、中心落库 0 条（内容完全相同） |
-| 同步中心测试**在真 Termux 上跑**（Android 11 手机 / Termux 自带 Python 3.14.6 / arm64） | **50/50 通过** —— 零依赖、零编译，`pkg install python` 之后直接 `python3 -m unittest discover -s tests -t .`，不用 root、不用装任何第三方包 |
-| 跨实现③：**Termux 上的中心 ⇄ PC 上的中心** | 两台中心互认协议 2；Termux 侧一轮从 PC 拉回 **12 条**，紧接着第二轮 `拉 0 推 0`（幂等）；`--status` 显示「已同步过（2026-10-05 14:49，拉 0 / 推 0）」 |
-| 跨实现④：**Termux 上的中心 ⇄ 模拟器里的真 App** | 手机 Termux 里的中心 `--check` 认到 App（`Android 模拟器，协议 2`）；第一轮从 App 拉 10 条，在 Termux 里新建一条后第二轮**把它推给 App**（App 12 → 13 条，App 侧同步日志出现「接客（主机）Termux Hub (Android 11 手机) 拉取 0 条 · 推送 1 条」）。整条链路 = 真手机的 Termux Python ⇄ 真 Android App，靠的就是同一套协议 |
-| 设备状态落库（`--status` 是另一个进程） | `--status` 输出 `曾接入 Android 模拟器（127.0.0.1）：已同步过（2026-10-05 14:41，拉 11 / 推 0）` —— 修复前这里永远是「还没成功同步过」，因为状态只在内存里 |
-| 界面 | 「更多 → 局域网同步」新增**定时自动同步**卡片：开关 + 「已开启 · 每 30 分钟」+ 「上次自动同步 刚刚 · 成功」+ 间隔四档（15 / 30 / 60 / 180 分钟）+ 一行说明；失败时才显示诊断详情（成功时不留那串英文统计，免得占地方）；四语言文案齐全 |
-| APK 元信息 | `versionCode 14` / `versionName 1.10.0`（`dumpsys package` 读回确认）；minSdk 26 / targetSdk 36 |
-
-### v1.10.1 验证（只在局域网里同步）
-
-服务端与 App 侧分别验证，最后在真机平板 上做了一次覆盖安装。
-
-| 检查项 | 结果 |
-| --- | --- |
-| 纯 JVM 单测 | **58/58** 通过（v1.10.0 是 55 例；新增 `LanAddressTest` 3 例 —— 写它当天就抓到 `[fd00::1]:8765` 这种方括号写法没被处理，已修） |
-| 仪器化测试（Android 13 / SQLite 3.32.2） | **50/50** 通过（v1.10.0 是 47 例；新增 3 例：被拦时不发请求、跳过不是重试、周期任务约束为不计费网络） |
-| 仪器化测试（Android 15 / SQLite 3.44.3） | **50/50** 通过 |
-| 同步中心测试（PC） | **41/41** 通过（v1.10.0 是 29 例，新增 12 例局域网限制） |
-| 同步中心测试**在真 Termux 上跑**（Android 11 手机 / Python 3.14.6 / arm64） | **41/41 OK**（16.4 秒；把改好的 `knownote_hub.py` 与 `tests/` 推回手机现跑） |
-| 「一个请求都不发」是真验的 | 仪器化用例断言的是**主机侧收到的请求数 == 0**，不是只看返回值 —— 一个空跑的会话也会「成功」，只看返回值等于什么都没测 |
-| 「跳过」不是「重试」也不是「失败」 | 被拦时返回 `success` 并记 `skipped:`：`retry` 会让手机在外面退避重试白耗电，`failure` 会直接把周期任务取消（v1.10.0 记过的坑） |
-| 系统层不想被叫醒 | 断言周期任务是 `NetworkType.UNMETERED`；并验过自愈补排改用 `UPDATE`（`KEEP` 改不掉老设备上已有的约束） |
-| 服务端 403 之后没动数据 | 被拒请求前后笔记条数与内容哈希一致（不是「回了 403 但已经写进去了」） |
-| 服务端来源判定 | 直连公网地址 403、`CF-Connecting-IP` 为公网时 403、多跳 `X-Forwarded-For` 只认第一跳、私有地址放行、`lan_only:false` 放行；`bind` 是公网地址时 `main()` 返回 2 |
-| 地址口径两侧一致 | RFC1918 + 环回 + 链路本地 + IPv6（`::1` / `fc00::/7` / `fe80::/10`）；两侧都**刻意排除** `100.64.0.0/10`（运营商大内网 = 移动数据所在网段） |
-| 界面 | 从机区块下面的说明与主机卡片的「已拒绝 N 次局域网外的连接」都上真机看过；四语言文案齐全，无排版错乱 |
-| 覆盖安装（安卓平板 / Android 16 / SDK 36） | 1.10.0 → 1.10.1 原地升级：装前已备份；装后 `user_version` 3 与各项计数（笔记 / 标签 / 分组 / 变更日志）与升级前**逐项相同**，`notes` 内容哈希不变，偏好文件与图片字节一致，`firstInstallTime` 未变（只动 `lastUpdateTime`），开屏的条数统计与实际条数一致 |
-| 真隧道访问（最接近「真被人从外面连」的一条） | 把家里的 Cloudflare 隧道（`example.com`）临时指到中心上再真访问：`lan_only:true` 时 `https://example.com/ping` 返回 **403**，中心日志写着「拒绝局域网外的请求：代理头里的真实来源 203.0.113.7 不在局域网网段」—— 隧道把连接说成来自 127.0.0.1，真身在 `CF-Connecting-IP` 里，拦的就是这一层；把 `lan_only` 改成 `false` 再访问同一地址变 **200**（对照组），说明拦住它的确实是这条规则，不是别的。验完临时配置已删、隧道配置恢复原样 |
-| APK 元信息 | `versionCode 15` / `versionName 1.10.1`；deliverables 里的 `KnowNote-1.10.1-debug.apk` |
-
-### v1.10.2 验证（同步 = 双向库存比对）
-
-修的是真机上的一个 bug：**新设备同步只成功三条**。原因是差集靠水位线推断（见 §6.3）。
-
-| 检查项 | 结果 |
-| --- | --- |
-| 复现与定性 | 老设备（水位线已被上一个对端推到当前）连上新对端 → 「水位线之后的变更」算出来是空的 → 新对端只拿到零星几条。同步不该依赖水位线，该**双向比库存** |
-| 纯 JVM 单测 | **62/62** 通过（v1.10.1 是 58 例；新增 `SyncDiffTest` 4 例：对方没有 / 我更新 / 时间戳打平但指纹不同 / 墓碑，以及两侧哈希固定值） |
-| 仪器化测试（Android 13 / Android 15） | **57/57** 通过（新增 5 例：水位线已推进时全新主机仍拿到全部 5 条、没有待推增量时删除照样传过去、线上结构体往返、黄金 JSON 双侧断言） |
-| 同步中心测试（PC 与真 Termux） | **50/50** 通过（新增 8 例：新对端拿全库、水位线推进后仍全推、稳点的轮数与幂等、只传真差集、库存比对纯逻辑、墓碑不请求、线结构体往返、黄金 JSON） |
-| 两端指纹必须逐位一致 | `fnv1a32` 在 Kotlin 与 Python 各有一条**同样输入、同样期望值**的断言（`551d9a74` / `04a770bf`）。差一位就会永远认为「内容不同」，每次同步白传一轮正文 |
-| 键名必须逐字一致 | 同一串黄金 JSON 在两处各钉一半：Python 断言「生成器吐出来的就是这串」，Kotlin 断言「这串能解析出 inventory / want_guids / 正文」。这是唯一没被真机链路覆盖的方向（App 当从机读中心） |
-| 验证时又抓到自己的一个 bug | 协议 3 的 `inventory` / `want_guids` 只加进了**请求**的解析，响应的 `from_json` 漏了（Python 侧）。症状不是数据错，而是每轮都重传整库 —— 真机跨实现验证（Termux 中心 ⇄ PC 中心）时从日志的「5 轮」看出来；修完稳态回到「1 轮」。补了两条回归：线结构体往返 + 轮数断言 |
-| 真机跨实现（协议 3）：**Termux 中心 ⇄ PC 中心** | Termux 侧：全新库第一轮**拉 3 条**；紧接着 `拉 0 推 0`（1 轮，库存一致）；在 Termux 侧新建一条后 `推 1 条落库`（2 轮 = 一轮点名 + 一轮发正文）。全程走真局域网（192.168.1.7 ⇄ 192.168.1.9） |
-| 真机跨实现（协议 3）：**PC 中心 ⇄ 模拟器里的真 App** | `--check` 认到 `✓ 通（对端自称 Android 模拟器，协议 3）`；中心当客户端去拉 App 主机：第一轮 App 点名要了 2 条 → 第二轮把 2 条推过去（**App 库里核实**：`user_version 3`、`pc-to-app-*` 两条俱在，`sync_log` 记着 `host · 推 2`）；再跑一轮 `拉 0 推 0、1 轮` —— 库存与指纹两边一致，差集为空 |
-| 局域网边界没被放松 | 顺手验到 v1.10.1 的那道闸在模拟器上也真的拦：模拟器只有移动数据时，App 从机记的是 `Sync blocked: the device is not on a local network (mobile data?)`（**一个请求都没发出去**） |
-| APK 元信息 | `versionCode 16` / `versionName 1.10.2`；`KnowNoteApk/KnowNote-1.10.2-debug.apk` |
-
-## 五之二、版本记录
-
-| 版本 | 说明 |
-| --- | --- |
-| v1.0.0 | 首个可用版本（第一阶段全部功能） |
-| v1.0.1 | 修 FTS 引擎误判导致检索降级为 LIKE；新增「更多」页诊断信息，重复探测幂等 + 回归测试 |
-| v1.1.0 | 第二阶段：Markdown 渲染、编辑/预览切换、搜索历史、筛选记忆、回收站；数据库 1→2 真实迁移 + 迁移测试 |
-| v1.1.1 | 修「记一条」里标签输完直接保存会丢标签；点击=查看 / 长按=编辑；列表 ↔ 瀑布流切换 |
-| v1.2.0 | 「分组」「标签」页条目点击可看组内 / 带该标签的笔记；两页复用笔记页的卡片样式与列表 ↔ 瀑布流循环切换；卡片组件抽成共享 `ui/components/NoteCards.kt`，展示形态枚举移到 `ui/NoteLayout.kt`。**（该版做成的是「原地展开」，v1.2.1 已改成二级页面）** |
-| v1.2.1 | 按反馈把「原地展开」改为**独立二级页面**（`group/{groupId}`、`tag/{tagId}` 路由 + `NoteCollectionScreen`）：左上返回、本页筛选框、与笔记页同款卡片与形态切换；顺带修真机验证时发现的 bug —— 只是点开看了一眼就返回，会被无条件保存刷新 `updated_at`、把笔记顶到列表最前（加 `dirty` 判定 + 3 个回归测试） |
-| v1.3.0 | 第三阶段：**局域网同步**落地 —— 一主多从 + 手动触发、主机内嵌 HTTP 服务（手写 ServerSocket，无第三方依赖）、协议 `GET /ping` + `POST /sync`、一次请求双向增量、时间戳优先冲突裁决（打平按内容确定性收敛）、共享密钥认证；数据库 2→3 迁移（`notes.guid` 唯一索引 + `is_purged` 墓碑 + `sync_log`）；「彻底删除」由删行改墓碑；同步页从路标页换成真页面；顺带修「更多」页版本号写死的问题 |
-| v1.4.0 | 修「更多」页概览不刷新（一次性查询 → Room Flow 实时统计，回收站 / 变更日志等数字随写入自动更新）；新增**设置页**：主题模式（跟随系统 / 浅色 / 深色）、主题色（默认初音绿 / Android 12+ 动态取色）、回收站定时清理（WorkManager 每天一次 + 保留天数 + 立即清理）；`AppSettings` 用 StateFlow 承载设置，改主题立即换肤；顺带修「彻底删除」确认文案（v1.3.0 起不再物理删行，旧文案说"从数据库中永久移除"已不准确） |
-
-| v1.5.0 | **多语言 + 品牌化**：四语言界面（254 条去重文案抽成资源，API 33+ 用系统 per-app language）；改名 KnowNote / 碎片笔记 / 碎片筆記；图标补单色层（主题图标动态取色）；FTS 判定依据与同步日志等**诊断信息统一英文**；修一个只有上真机才会暴露的 bug —— 译文里的 Kotlin 模板被原样写进资源，日语界面显示出 `$days 日` 这类字面量（见第五节） |
-| v1.6.0 | **可调阅读显示 + 检索更可控**：字号五档（整棵 Typography 等比缩放，层级关系不变）、文字颜色七种；检索范围可单独勾选标题 / 正文 / 标签（默认全选，收窄时自动放宽候选集）；检索与搜索历史统一忽略大小写（`Locale.ROOT`）。文字颜色改的是**主题色角色**而不是 `LocalContentColor` —— 页面里 60 多处 `Text` 显式写了颜色，只有改角色才真正生效 |
-| v1.7.0 | **阅读页可调 + 行内格式**：阅读页底部滑块单独调字号（倍率制，与全局字号解耦）+ MD / 文本模式切换；编辑器选中文字可加粗体 / 斜体 / 三档字号 / 六色，标记以 `<color>` / `<size>` 存进纯文本。顺带修一个真机才暴露的 bug：渲染器原先不递归解析行内内容，「粗体在外、颜色在内」会把标记当普通文字吐出来。单测 16 → **38** |
-| v1.8.0 | **正文插入图片**：相册选择 → 拷进私有目录（缩小重编码）→ 正文存 `![说明](img:文件名)`；渲染分块进行，图片独占整行（行内插入的同样单独成行）；摘要显示 `[说明]`。图片随**局域网同步**一起传输（同一张只传一次，超量自动分批多轮传完）；导出仍只带引用、不带图片文件 |
-| v1.9.0 | **图片参与局域网同步**：协议升到 2；一次同步里图片与笔记一起走（base64 承载，单批最多 6 张 / 4MB），超量自动多轮传完；每台设备记住「对端已有哪些图」，同一张只传一次；同步日志里带上图片收发张数 |
-| v1.10.0 | **定时自动同步 + Termux 同步中心**：同步页新增「定时自动同步」卡片（开关 / 间隔四档 / 上次结果），设备侧用 WorkManager 周期任务在后台把变更推给主机；新增 `server/knownote_hub.py` —— 纯 Python 3 标准库的同步中心，说的就是 App 那套协议（协议 2），既能当主机被 App 同步，也能按 `interval_seconds` **主动去连各台设备**（定时调度放在服务器侧，手机不用常驻后台），可长期跑在 Termux 上；一份 `start-hub.sh` 管启动 / 后台 / wake-lock / 状态 / 日志；同步会话加串行闸（手动与定时不会互相打水位线）；设备状态落库，`--status` 换进程也看得见 |
-| v1.10.1 | **只在局域网里同步**：三处都拦 —— App 从机（不在局域网 / 对端是公网地址就不启动，连请求都不发）、App 主机（来连的地址不在局域网直接 403，页面显示已拒绝次数）、同步中心（`lan_only` 默认开：非私有来源 403，隧道按 `CF-Connecting-IP` / `X-Forwarded-For` 里的真身判断，`bind` 指向公网地址或本机没连局域网时拒绝启动）。定时任务的系统约束从「有网」收紧到 `UNMETERED`，并改用 `UPDATE` 覆盖老设备上已有的任务（用 `KEEP` 时约束改不掉）。被拦下按「跳过」处理（不 retry、不 failure —— 周期任务不能被取消）。四语言文案 + 单测 / 仪器化测试 |
-| v1.10.2 | **同步改成双向库存比对（协议 3）**：修掉真机上「新设备同步只成功三条」的 bug —— 原来靠水位线 + 变更日志**推断**「对方缺什么」，而水位线记的是「和上一个对端同步到哪」，所以一台老设备去连全新对端时，算出来的增量是空的，只推过去零星几条。现在每一轮的请求与响应都带**全量库存**（`guid` + `updated_at` + 墓碑位 + 内容指纹，不含正文），两端用同一个纯函数算差集（Kotlin 的 `SyncDiff` 与中心的 `SyncDiff` 逐位一致），正文只由对方用 `want_guids` 点名后按 guid 传；水位线降级成「省一轮往返的快路径 + 界面显示」，**正确性不再依赖它**（换对端、时钟偏差、水位线乱掉都不影响结果） |
-
-## 六、局域网同步（v1.3.0 起，v1.10.0 加定时，v1.10.1 加局域网边界，v1.10.2 改成双向库存比对）
-
-### 6.1 模式：一主多从，手动或定时
-
-一台设备开「主机模式」（内嵌 HTTP 服务，默认端口 8765），其他设备填「主机地址 + 共享密钥」点「开始同步」。
-同一台设备两个角色都能当（同步页里两块都在），个人场景下经常是手机和平板互相轮换。
-
-v1.10.0 起**触发方式**有两种，可以只开一种也可以都开（详见 6.7）：
-
-- **手动**：点「开始同步」。
-- **定时**：设备侧 WorkManager 周期任务；或者把「主机」换成 Termux 上的同步中心（`server/`），
-  由**服务器侧**按固定间隔主动来拉 —— 手机不用常驻后台，也不用管 Android 的省电策略。
-
-### 6.2 协议：HTTP + JSON，两个接口
+一台设备开「主机模式」（内嵌 HTTP 服务，默认端口 8765），其他设备填「主机地址 + 共享密钥」同步；
+同一台设备两种角色都能当。
 
 | 接口 | 说明 |
 | --- | --- |
-| `GET /ping` | 连通性探测，只回 `{protocol, device_name}`，**不需要密钥** —— 用来区分「地址填错了 / 主机没开」和「密钥不对」这两种失败 |
-| `POST /sync` | 一次请求完成双向同步：请求头 `X-KnowNote-Key`；请求体带**自己的全量库存** + 自己的变更 + 水位线（只是快路径），响应带**主机的库存** + 点名要正文的 `want_guids` + 主机的变更 + 落库统计 |
+| `GET /ping` | 连通性探测，返回 `{protocol, device_name}`，**不需要密钥**（用于区分地址填错、主机没开、密钥不对） |
+| `POST /sync` | 一次请求完成双向同步；请求头 `X-KnowNote-Key`；请求体带本机全量库存 + 本机变更 + 水位线，响应带主机库存 + `want_guids` + 主机变更 + 落库统计 |
 
-**线格式里不带任何本地 id**：笔记用 `guid`（32 位十六进制）认人；分组和标签直接传**名字**，
-对端按名字解析、没有就建 —— 于是完全不需要 id 映射表。
+线格式不带任何本地 id：笔记用 `guid`（32 位十六进制）认人，分组与标签传名字，对端按名字解析或新建 —— 不需要 id 映射表。
 
 ```json
 {"guid":"a4e5f331...","title":"...","content":"...","group":"零散知识点","tags":["标签1"],
  "created_at":1700000000000,"updated_at":1700000001000,"is_deleted":0,"is_purged":0}
 ```
 
-库存条目（协议 3 起）只有身份与指纹，**不含正文** —— 「先比差集、再传正文」靠的就是它：
+协议 3 起，每轮附带库存条目（只有身份与指纹，不含正文）：
 
 ```json
 {"g":"a4e5f331...","u":1700000001000,"p":0,"h":"551d9a74"}
 ```
 
-### 6.3 差集：**双向库存比对**（v1.10.2 起；水位线降级为快路径）
+### 差集：双向库存比对（协议 3）
 
-同步真正要回答的只有一句：**两边各有什么、差在哪**。v1.10.2 之前这一步是**推断**出来的
-（「我发水位线之后改过的东西」，靠 `change_log` + `last_sync_at`），它有个洞：
-**换对端的时候水位线是错的**。水位线记的是「和上一个对端同步到哪」，所以一台老设备
-（水位线刚被上一个对端推到当前）去连一个全新的对端时，「水位线之后的变更」算出来是**空的** ——
-新对端只拿到零星几条。真机上就是这么丢的（新设备同步只成功三条）。
+- 请求与响应都带**全量库存**：每条笔记的 `guid` + `updated_at` + `is_purged` + `hash`（内容规范串的 FNV-1a 32 位指纹）
+- 两端使用同一个纯函数（App 的 `SyncDiff` 与中心的 `SyncDiff`，Kotlin 与 Python 逐位一致）：
 
-现在按本来的做法来：
+| 比对结果 | 动作 |
+| --- | --- |
+| 对方没有 / 我更新 / 时间戳打平但指纹不同 | 我发 |
+| 我没有 / 对方更新 | 我要 |
+| 完全相同（含两边都持有的同一枚墓碑） | 不动（幂等的来源） |
 
-- 每一轮的请求与响应都带一份**全量库存 `inventory`**：每条笔记的 `guid` + `updated_at`
-  + `is_purged` + `hash`（内容规范串的 FNV-1a 32 位指纹），**不含正文**；
-- 双方用**同一个纯函数**算差集（App 的 `SyncDiff` 与中心的 `SyncDiff`，Kotlin 与 Python 算出来逐位一致）：
-  - 对方没有的 / 我更新的 / 时间戳打平但指纹不同的 → **我发**；
-  - 我没有的 / 对方更新的 → **我要**；
-  - 一模一样的两条（含两边都有的同一枚墓碑）→ 谁都不动，这就是幂等的来源；
-- 正文只在**确实需要**时才传：命中差集的条目由对方在响应里用 `want_guids` 点名，
-  下一轮按 guid 取正文发过去（先比差集、再传正文；一次同步最多 5 轮）；
-- `last_sync_at` 仍然保留，但只做两件事：**省一轮往返的快路径**（常见的「我改了就该推给你」正好命中）
-  与**界面显示**（「上次同步水位线」）。**正确性不再依赖它** —— 水位线偏了、对端换了、两台机器时钟不准，
-  差集照样算对。
-- 主机收到从机的变更时会**记一条变更日志**（`at` 用主机收到的时刻），
-  否则第三个从机永远拉不到「第二个从机改的内容」；从机侧则**不记**，免得把自己的库当新变更推回去。
-- 协议版本 2 → **3**（两侧都带 `inventory`，响应多一个 `want_guids`）：**中心与 App 要一起升级** ——
-  v1.10.1 的 App 和协议 3 的中心会互相回 426。
+- 正文只在确实需要时传输：命中的条目由对方在响应里用 `want_guids` 点名，下一轮按 guid 取正文发送；一次同步最多 5 轮
+- `last_sync_at` 保留，只作「省一轮往返的快路径」与界面显示，**正确性不依赖它**
+- 主机收到从机变更时记一条变更日志（`at` 取接收时刻），否则第三个从机拉不到第二个从机的改动；从机侧不记
 
-### 6.4 冲突：时间戳优先，打平按内容确定性收敛（设计决策）
+协议 2 → 3 是断点：v1.10.1 的 App 与协议 3 的中心会互相返回 426，两侧须一起升级。
 
-1. `updated_at` 大的那版整体覆盖（标题 / 正文 / 分组 / 标签 / 软删除 / 墓碑一次全换）；
-2. 本机更新就不动 —— 对端下次同步会拿到本机这版，按同样规则认输；
-3. **时间戳打平但内容不同**：两端都取「规范串较大」的那版。这样一定收敛到同一份，
-   而不是各留各的、每次同步互相打回。**这条有专门的回归测试**：两台设备各自应用对方的版本，断言最终内容相同。
+### 冲突裁决
 
-### 6.5 「彻底删除」为什么改成墓碑
+1. `updated_at` 大者整体覆盖（标题 / 正文 / 分组 / 标签 / 软删除 / 墓碑）
+2. 本机更新则不动，对端下次同步取得本机版本
+3. 时间戳打平但内容不同：两端都取「规范串较大」的版本，保证收敛（有回归测试断言两端最终内容相同）
 
-原来「彻底删除」是 `DELETE FROM notes`。有了同步之后这会出事：对端不知道你删了，
-下次同步会把这条笔记**再推回来**。所以 v1.3.0 起彻底删除 = 保留一行 `is_deleted=1 + is_purged=1` 的墓碑，
-所有列表 / 检索 / 计数都过滤 `is_purged=1`，删除意图靠时间戳传出去。
+### 彻底删除 = 墓碑
 
-### 6.6 安全边界（不承诺做不到的事）
+保留一行 `is_deleted=1 + is_purged=1`，不删行；否则对端下次同步会把笔记推回来。
+所有列表 / 检索 / 计数过滤 `is_purged=1`，删除意图靠时间戳传播。
 
-- **认证**：`X-KnowNote-Key` 共享密钥，常量时间比较，错密钥 401。密钥是应用生成的 8 位可读随机串
-  （去掉了 `0/O/1/I/l` 这类容易看错的字符，因为要念着敲到另一台设备上），可在同步页重新生成。
-- **保密**：**没有**。局域网内明文 HTTP，同网段抓包能看到笔记内容。密钥解决的是「谁能同步」，
-  不是「中途看不看得见」——需要保密要等后续上 TLS 或自建预共享密钥加密。
-- **暴露面**：主机绑定 `0.0.0.0`，但**没设密钥会拒绝启动** —— 一个谁都能读走全部笔记的服务
-  比「忘记开同步」更危险。开启状态会记进偏好，下次进应用时恢复监听（只有用户明确选过才恢复）。
-- **只在局域网里同步**（v1.10.1）：两端都要求地址落在局域网网段 ——
-  手机不在局域网（移动数据）不启动同步、对端是公网地址也拒绝（手动点会当场说明原因）；
-  主机侧来连的地址不在局域网直接 403。共享密钥管的是「谁有权限」，这条管的是「从哪儿来」，
-  是两道不同的门。细则见 6.9。
-- **生命周期**：主机服务挂在应用作用域上，切页面不掉线；但**没做前台 Service**，进程被系统回收就停。
-  同步页里直接写明了这一点，不假装能后台常驻。
+### 安全边界
 
-### 6.7 定时自动同步：两条路，各有各的边界
+| 项 | 说明 |
+| --- | --- |
+| 认证 | `X-KnowNote-Key` 共享密钥，常量时间比较，错密钥 401；密钥为 8 位可读随机串（去掉 `0/O/1/I/l`），可在同步页重新生成 |
+| 保密 | **无**。局域网内明文 HTTP，同网段抓包可见笔记内容；保密需后续 TLS 或预共享密钥加密 |
+| 暴露面 | 主机绑定 `0.0.0.0`，但**未设密钥拒绝启动**；开启状态记入偏好，下次进入应用恢复监听 |
+| 来源限制 | 仅局域网（v1.10.1），见下节；共享密钥管「谁有权限」，来源限制管「从哪儿来」 |
+| 生命周期 | 主机服务挂在应用作用域，切页面不掉线；未做前台 Service，进程被回收即停止 |
 
-「到点自动同步」这件事有两个不同的实现位置，本版**两个都做了**，因为它们各自有一半解决不了的问题：
+### 定时自动同步
 
-| | 设备侧（App 里的 `data/sync/AutoSync.kt`） | 服务器侧（`server/knownote_hub.py`） |
+| | 设备侧（`data/sync/AutoSync.kt`） | 服务器侧（`server/knownote_hub.py`） |
 | --- | --- | --- |
-| 谁发起 | 手机（WorkManager 到点拉起进程） | 中心（按 `interval_seconds` 主动连手机） |
-| 最短节拍 | **15 分钟**（Android 的硬下限），省电 / 息屏时还会再推迟 | 自定义（默认 60 秒，想多密都行） |
-| 需要什么 | 只要「主机地址 + 密钥」填对，不需要对端在跑 | 手机上得开着**主机模式**、App 进程还活着（6.6 那条限制一样适用） |
-| 开关在哪 | App 同步页「定时自动同步」卡片 | 配置文件 `interval_seconds` |
+| 谁发起 | 手机（WorkManager 到点拉起进程） | 中心（按 `interval_seconds` 主动连接设备） |
+| 最短节拍 | 15 分钟（Android 下限），省电 / 息屏时推迟 | 自定义，默认 60 秒 |
+| 前提 | 主机地址与密钥填对，对端不必在跑 | 设备开着主机模式且 App 进程存活 |
+| 开关 | 同步页「定时自动同步」卡片 | 配置项 `interval_seconds` |
 
-两个一起开最稳：手机醒来就推一次，中心到点就拉一次，谁先到算谁 —— 反正同步是幂等的
-（验收时实测：App 把 10 条推给中心、中心落库 0 条，因为内容完全一样）。
+两者可同时开启（同步幂等）。两个实现要点：
 
-**实现上踩到的两个坑（都有回归测试钉住）**：
+- 配置不全时返回 `success` 而非 `failure`：`failure` 会取消周期任务，用户之后填好地址也不会再跑
+- 手动与定时共用同一水位线，`SyncCoordinator` 加互斥锁串行化会话
 
-1. **配置不全时不能返回 `failure`**。WorkManager 的规则是 Worker 返回 `failure` 就**把周期任务取消掉**，
-   于是用户第二天填好地址、任务却永远不会再跑，而且界面上什么异常都看不到。
-   所以「地址没填 / 密钥没设」按 `success` 处理（下一个周期再试），只有真的连不上才 `retry`（指数退避）。
-2. **手动同步和定时同步会撞水位线**。两者读的是同一份 `sync_meta.last_sync_at`，并行跑会各自读到同一个旧水位线、
-   把同一批变更推两遍（幂等所以数据不会坏，但日志重复、水位线互相覆盖）。
-   所以 `SyncCoordinator` 上加了一把互斥锁，会话排成队。
+打开开关时会立即按同一路径执行一次，地址填错可当场发现。
 
-另外，打开开关时会**立刻按同一条路跑一次**（调的就是 Worker 调的那个函数），
-这样地址填错能当场看到，而不用等 15 分钟才发现。
+### 仅局域网（v1.10.1）
 
-### 6.8 Termux 同步中心（`server/`）
+| 位置 | 拦在哪 | 规则 |
+| --- | --- | --- |
+| App 从机 | `SyncCoordinator.syncSession` 入口（手动与定时共用） | 当前网络非局域网或对端地址非局域网 → 不发请求，记日志并说明原因 |
+| App 主机 | `SyncServer.handle` 首步 | 来源非局域网 → 403（含 `/ping`），计数并记日志 |
+| 同步中心 | `Hub.lan_check` | 来源非局域网 → 403；带代理头时按 `CF-Connecting-IP` / `X-Forwarded-For` 的真实来源判断；`lan_only` 默认开 |
 
-`server/knownote_hub.py` 是一个能长期跑着的「同步中心」：它同时干两件事 ——
+局域网口径（App 与中心一致）：RFC1918（10/8、172.16/12、192.168/16）+ 环回（127/8）+ 链路本地（169.254/16），
+IPv6 的 `::1` / `fc00::/7` / `fe80::/10`。运营商大内网 `100.64.0.0/10` **刻意不计入**（手机在移动数据上即该网段）。
 
-1. **当主机**：`GET /ping` + `POST /sync`，与 App 的线格式**完全一致**（协议版本 2），
-   所以手机上填「中心地址 + 密钥」就能把它当普通主机用，一行 App 代码都不用改；
-2. **当轮询者**：按 `interval_seconds` 依次去连配置里的每台设备（设备那边开着主机模式），
-   把「谁也记不清该同步了」这件事交给中心 —— 这就是「定时调度放在服务器侧」。
+设备侧另有系统级约束：周期任务要求 `UNMETERED` 网络。约束在排任务时确定，改约束须用
+`ExistingPeriodicWorkPolicy.UPDATE`，`KEEP` 不会更新已有任务。
 
-只用 **Python 3 标准库**（`http.server` / `sqlite3` / `threading` / `base64`），零依赖、零编译。
-Termux 上 `pkg install python` 就能跑，不需要 root，也不需要常驻前台服务：
+被拦按「跳过」处理：记 `skipped:` 并返回 `success`；返回 `retry` 会让手机在外面退避重试，返回 `failure` 会取消周期任务。
+
+中心另有启动守卫：`bind` 解析结果全为公网地址、或本机无局域网地址 → 打印原因并以退出码 2 结束；判断不出时只警告。
+
+该限制只覆盖来源网段与本地网络类型，不防中间人；跨网段使用需关闭 `lan_only`，并接受仅共享密钥把关。
+
+### Termux 同步中心（`server/`）
+
+两个角色：
+
+1. **主机**：`GET /ping` + `POST /sync`，与 App 线格式完全一致（协议 3），App 填「中心地址 + 密钥」即可当普通主机用
+2. **轮询者**：按 `interval_seconds` 依次连接配置中的设备（设备侧需开主机模式）
+
+只用 Python 3 标准库（`http.server` / `sqlite3` / `threading` / `base64`），零依赖零编译，Termux 上 `pkg install python` 即可运行。
 
 ```bash
 cd server
-python knownote_hub.py --init-config hub.conf.json   # 生成配置（密钥是随机生成的，可以直接用）
-vim hub.conf.json                                    # 填 devices：每台手机的局域网 IP + 端口 + 密钥
-bash start-hub.sh bg                                 # 后台跑（nohup + 写 hub.pid / hub.log）
-bash start-hub.sh status                             # 中心存了多少条、每台设备上次同步结果
-bash start-hub.sh check                              # 只探测各设备通不通（不动数据）
-bash start-hub.sh log                                # 跟着看日志
-bash start-hub.sh stop                               # 停
+python knownote_hub.py --init-config hub.conf.json   # 生成配置（随机密钥，可直接用）
+vim hub.conf.json                                    # 填 devices：设备局域网 IP + 端口 + 密钥
+bash start-hub.sh                                    # 前台运行（Ctrl+C 停止）
+bash start-hub.sh bg                                 # 后台运行（nohup，写 hub.pid / hub.log）
+bash start-hub.sh status                             # 中心条数与各设备上次同步结果
+bash start-hub.sh check                              # 只探测各设备连通性，不动数据
+bash logs.sh                                         # 跟随日志
+bash stop-hub.sh                                     # 停止后台进程
 ```
 
-其他常用参数：`--once`（只跑一轮轮询就退出，方便放 cron / Termux:Boot）、`--status`、`--check`、
-`--port`、`--key`、`--print-key`。`hub.conf.json`、`knownote-hub.db`、`images/` 都在 `.gitignore` 里 ——
-里面有密钥和真实笔记，不进公开仓库（样例配置是 `hub.conf.example.json`）。
+其他参数：`--once`（只跑一轮轮询，适合 cron / Termux:Boot）、`--status`、`--check`、`--port`、`--set-key`、`--print-key`。
+`hub.conf.json`、`knownote-hub.db`、`images/` 均在 `.gitignore` 内（含密钥与真实笔记）；样例配置为 `hub.conf.example.json`。
 
-几条边界，说清楚免得误会：
+边界：
 
-- **中心不存「对端状态」**：谁缺哪些图片完全由对端 `advertise` 的集合算出来，
-  所以中心挂了重启、换机器、数据库被清空，都不会让设备之间「记错对方有什么」；
-  （中心库里确实存了每条设备的水位线、上次同步结果和一份「对端上次说自己有哪些图」的缓存 ——
-  但那只是省一轮传输的提示，每轮都以对端新 advertise 的集合为准，缓存丢了最坏是多传一轮。）
-- **安全**：和 App 主机同一套 —— 共享密钥（常量时间比较）+ 同一 IP 连续错密钥限流；
-  **没设密钥拒绝启动**（退出码 2），不给自己留一个谁都能读走全部笔记的口子；
-  **只在局域网里服务**（`lan_only`，默认开）：局域网外的来源一律 403（含 `/ping`），
-  经隧道 / 反代进来的按 `CF-Connecting-IP` / `X-Forwarded-For` 里的真实来源判断，
-  `bind` 指向公网地址或本机没连着局域网时直接拒绝启动（细则见 6.9）；
-  传输仍是**明文 HTTP**（和 6.6 一样，局域网内可控、跨网段不要用）；
-- **它不是「云端」**：数据只落在运行它的那台机器上（默认就是 Termux 的 app 私有目录），
-  没有账号、没有上游服务；想异地用请自己套一层隧道 / VPN；
-- **单进程够用**：`http.server` 的 `ThreadingHTTPServer` + 一把 SQLite 写锁，
-  个人量级（几台设备、几千条笔记）绰绰有余，但如果真要给几十台设备当中转，得换正经 WSGI + 连接池。
+- **不存对端状态**：所需图片由对端每轮 `advertise` 的集合算出，中心重启 / 换机 / 清库不影响设备间判断（库里的水位线与图片缓存只是省一轮传输的提示）
+- **安全**：同 App 主机（共享密钥 + 同 IP 错密钥限流 + 未设密钥拒绝启动 + `lan_only` 默认开），传输为明文 HTTP
+- **非云端**：数据只落在运行它的机器上，无账号与上游服务；异地使用需自行加隧道 / VPN
+- **单进程**：`ThreadingHTTPServer` + 一把 SQLite 写锁，适合个人量级；几十台设备需换 WSGI + 连接池
 
-### 6.9 只在局域网里同步（v1.10.1）
+## 验证记录
 
-同步走的是明文 HTTP（见 6.6），所以「内容别离开局域网」值得做成一条规矩，而不是靠自觉。
-三处都拦，而且都拦在**唯一的出入口**上：
+### 功能与迁移（v1.0.0 – v1.9.0）
 
-| | 拦在哪 | 规矩 |
-| --- | --- | --- |
-| App 从机 | `SyncCoordinator.syncSession` 开头（手动与定时共用这一个入口） | 当前网络不是局域网（蜂窝网）、或对端地址不在局域网网段 → **一个请求都不发**，写一条同步日志，并把原因讲给用户听 |
-| App 主机 | `SyncServer.handle` 拿到连接的第一件事 | 来连的地址不在局域网 → 403（连 `/ping` 都不答），计数 + 记日志（同步页会显示「已拒绝 N 次局域网外的连接」） |
-| 同步中心 | `Hub.lan_check`（每个请求的第一道闸） | 直连地址不在局域网网段 → 403；带了代理头时，头里的**真实来源**也必须在局域网网段（隧道会被这一条挡住）。配置项 `lan_only` 默认开，可关 |
+| 检查项 | 结果 |
+| --- | --- |
+| 构建 | `:app:assembleDebug` / `assembleRelease` BUILD SUCCESSFUL |
+| 单元测试 | 55/55（`FtsTextTest` 8 / `MarkdownMarkupTest` 10 / `MarkupEditTest` 22 / `NoteBlocksTest` 7 / `SearchScopeTest` 8） |
+| 仪器化测试 | Android 13（SQLite 3.32.2）47/47；Android 15（SQLite 3.44.3）47/47 |
+| 同步引擎 `SyncEngineTest` | 8/8：远端新建（分组按名字建、标签关联）、时间戳优先、打平收敛、软删与墓碑传播、本地彻底删除留墓碑并同步出去、增量取数、主机记日志而从机不记、本机无该条时忽略墓碑 |
+| 真回环 `SyncLoopbackTest` | 3/3：真 ServerSocket + 真 HttpURLConnection + 两个独立库双向同步（拉 4 推 1，再同步幂等）、错密钥 401、无密钥拒绝启动 |
+| 迁移 `MigrationTest` | 3/3：1→2、2→3（`guid` 回填 32 位十六进制且互不相同、`is_purged` 默认 0、`sync_log` 可写、重复 guid 被唯一索引拒绝）、1→3 跨级；三步均对 schema JSON 校验 |
+| 真机检索 | 中文子串「检索」命中 2 条、前缀 `gradle*` 命中 1 条、多词元 AND 命中正确 |
+| 索引自愈 | 灌库时索引 0 条 → 启动后 8 条，与在线笔记数一致 |
+| 引擎自愈 | v1.0.0 制造降级态 → 覆盖安装 v1.0.1 → 恢复 FTS4 并整体重建，MATCH 全部命中 |
+| 真机迁移 | 覆盖安装后 `user_version` 逐级升级，既有笔记与索引保留；v2→v3 时 `guid` 3/3 唯一 |
+| 真机同步（主机侧 / App↔App） | `/ping` 200；错密钥 401；正确密钥双向落库；分组与标签按名字对齐；水位线幂等 |
+| 概览实时统计 | 删除 / 彻底删除后「更多」页计数即时变化，墓碑仍保留 |
+| 多语言 | API 33 真机：切 English 后系统侧 `[en]`，跟随系统回 `[]`；应用名三语言从 APK 读回确认；切换语言不影响主题等设置 |
+| 主题与设置 | 深色立即换肤（不重建 Activity）；动态取色生效；「关于」版本号读包信息 |
 
-「局域网」的口径（App 与中心两侧同一套）：RFC1918（10/8、172.16/12、192.168/16）+ 环回（127/8）
-+ 链路本地（169.254/16），IPv6 的 `::1`、`fc00::/7`、`fe80::/10`。
-**运营商大内网 `100.64.0.0/10` 刻意不算**：手机在移动数据上就是那个网段，算进来这条规矩就白做了。
+### v1.10.0（定时自动同步 + Termux 同步中心）
 
-设备侧还有一层系统级的：定时任务的网络约束从「有网」改成 **`UNMETERED`（不计费网络）**，
-所以手机在外面根本不会被叫醒 —— 既省电，也不至于跑一趟再被拦。
-注意约束是**排任务时定下的**：改约束必须用 `ExistingPeriodicWorkPolicy.UPDATE` 覆盖已有任务，
-用 `KEEP` 的话老设备上那份旧约束会一直生效（v1.10.0 用的就是 `KEEP`，这个坑顺手修了）。
+| 检查项 | 结果 |
+| --- | --- |
+| 单元测试 | 55/55 |
+| 仪器化测试 | Android 13 与 Android 15 各 47/47（新增 `AutoSyncTest` 7 例） |
+| `AutoSyncTest` | 7/7：关开关不动、自动同步真的把中心笔记拉到本机并写「上次自动同步」、本机改动推上中心、地址 / 密钥缺失返回 success、中心未开机返回 retry、401 原因透出、周期任务真的排上 / 撤掉 |
+| 中心测试（PC） | 50/50：协议层（401 / 404 / 429 节流 / 坏 JSON / 协议版本）、引擎层（增量、冲突收敛、墓碑、图片只传一次、多轮）、调度层（双向、幂等、失败原因、水位线取 min）、库存差分、设备状态落库、局域网限制 |
+| 中心测试（真 Termux，Android 11 / Python 3.14.6 / arm64） | 50/50，`pkg install python` 后直接跑，无 root、无第三方包 |
+| 跨实现：中心拉 App | 中心 `--once` 拉回 App 8 条、推给 App 2 条；App 库 8 → 10 条，分组与标签按名字对齐 |
+| 跨实现：App 同步中心 | 中心新建笔记后 App 拉到 11 条；App 推 10 条时中心落库 0 条（幂等） |
+| 跨实现：Termux 中心 ⇄ PC 中心 | 一轮拉 12 条，第二轮 `拉 0 推 0`；`--status` 跨进程可见 |
+| 跨实现：Termux 中心 ⇄ 真 App | 一轮从 App 拉 10 条，中心新建一条后推给 App（12 → 13 条） |
 
-**被拦下不等于失败**：手动同步会说「当前不在局域网」或「该地址不在局域网」；
-定时同步记一条「跳过」并返回 `success` —— 返回 `retry` 会让手机在外面退避重试白耗电，
-返回 `failure` 会直接把周期任务取消掉（就是 6.7 记过的那个坑）。
+### v1.10.1（只在局域网里同步）
 
-中心那边还多一道**启动守卫**：`bind` 解析出来全是公网地址、或本机一个局域网地址都没有，
-就打印原因并以退出码 2 结束；判断不出来时只警告不拦（假警报比漏洞更烦人，真正的把关在每个请求上）。
+| 检查项 | 结果 |
+| --- | --- |
+| 单元测试 | 58/58（新增 `LanAddressTest` 3 例） |
+| 仪器化测试 | Android 13 与 Android 15 各 50/50（新增 3 例：被拦时不发请求、跳过不是重试、约束为不计费网络） |
+| 中心测试（PC / 真 Termux） | 41/41（新增 12 例局域网限制） |
+| 「一个请求都不发」 | 仪器化用例断言主机侧收到的请求数 == 0，不只看返回值 |
+| 其余服务端断言 | 403 前后笔记条数与内容哈希一致；直连公网 403、`CF-Connecting-IP` 为公网 403、多跳 `X-Forwarded-For` 只认第一跳、私有来源放行、`lan_only:false` 放行、公网 `bind` 使 `main()` 返回 2 |
+| 真隧道对照 | `lan_only:true` 时经隧道访问 `/ping` 返回 403（日志记录代理头里的真实来源），改 `false` 后同一地址返回 200 |
+| 覆盖安装（真机平板 / Android 16） | 1.10.0 → 1.10.1 原地升级：各项计数逐项相同、`notes` 内容哈希不变、偏好与图片字节一致、`firstInstallTime` 未变 |
 
-限制说明白：这条只挡「来源网段」与「本地网络类型」，不挡真正的中间人；
-要在跨网段用（隧道 / 异地）就得把 `lan_only` 关掉，并接受「只剩共享密钥把关」——
-想保密还是得上 TLS 或预共享密钥加密（见第七章）。
+### v1.10.2（同步 = 双向库存比对）
 
-## 七、下一步建议
+| 检查项 | 结果 |
+| --- | --- |
+| 故障定性 | 老设备水位线已被上一个对端推到当前 → 连新对端时算出的增量为空 → 新对端只拿到零星几条 |
+| 单元测试 | 62/62（新增 `SyncDiffTest` 4 例：对方没有 / 我更新 / 打平但指纹不同 / 墓碑，含两侧哈希固定值） |
+| 仪器化测试 | Android 13 与 Android 15 各 57/57（新增 5 例：水位线已推进时全新主机仍拿到全部 5 条、无待推增量时删除照样传过去、线结构体往返、黄金 JSON 双侧断言） |
+| 中心测试（PC / 真 Termux） | 50/50（新增 8 例） |
+| 跨实现指纹一致性 | `fnv1a32` 在 Kotlin 与 Python 各有一条同输入同期望值的断言（`551d9a74` / `04a770bf`） |
+| 跨实现键名一致性 | 同一串黄金 JSON 两侧各钉一半：Python 断言生成结果、Kotlin 断言可解析出 inventory / want_guids / 正文 |
+| 真机跨实现：Termux 中心 ⇄ PC 中心 | 空库第一轮拉 3 条 → `拉 0 推 0`（1 轮）→ 中心新建一条后推 1 条（2 轮） |
+| 真机跨实现：PC 中心 ⇄ 真 App | App 点名要 2 条并落库（读 App 库核实：`user_version` 3、两条俱在、`sync_log` 记 `host · 推 2`），稳态 `拉 0 推 0`、1 轮 |
+| 局域网闸未被放松 | 模拟器仅移动数据时 App 从机记 `Sync blocked: the device is not on a local network (mobile data?)`，未发出请求 |
 
-1. **同步加固**：主机改用前台 Service（带常驻通知）以便长期待命 —— v1.10.0 有了服务器侧定时拉取之后，
-   这条的紧迫性下降了一些（手机不必常驻，中心到点来拉即可），但「让手机一直当主机」还是得做；
-   上 TLS 或预共享密钥加密解决局域网窃听 —— 6.9 的局域网边界管的是「流量能去哪儿」，
-   管不了「中途看不看得见」（现在 App 主机与同步中心都还是明文 HTTP）；
-   跨网段 / 异地场景可考虑把「主机」做成可自选的静态地址而非手动输入
-2. **设备发现**：接 Android NSD / mDNS 自动发现主机，省掉手填 IP（本版刻意先做「地址 + 密钥」这条更可靠的路）
-3. **冲突体验**：现在是自动裁决，可以在同步日志里列出被裁决的条目，并提供「查看对端版本」入口
-4. **检索**：数据量上来后可评估自带 SQLite（`requery/sqlite-android`）以启用 FTS5 与自定义分词器
-5. **导出**：导出范围选择（按分组 / 标签 / 时间），以及导入（目前只导出）
-6. **墓碑增长**：`is_purged=1` 的行会一直留着（这是删除能同步的前提）。个人数据量下无感，但严格来说需要一个「墓碑保留期」——
-   比如超过一年且各设备水位线都早已越过它的墓碑可以真删。做之前要先确认所有从机都已同步过该时间点
+## 版本记录
 
-## 八、许可
+| 版本 | 说明 |
+| --- | --- |
+| v1.0.0 | 首个可用版本：笔记 / 标签 / 分组 + 全文检索 + 导出 |
+| v1.0.1 | 修 FTS 引擎误判导致检索降级为 LIKE；「更多」页增诊断信息；重复探测幂等 + 回归测试 |
+| v1.1.0 | Markdown 渲染、编辑 / 预览切换、搜索历史、筛选记忆、回收站；数据库 1→2 真实迁移 + 迁移测试 |
+| v1.1.1 | 修「记一条」中标签输完直接保存丢标签；点击 = 查看 / 长按 = 编辑；列表 ↔ 瀑布流切换 |
+| v1.2.0 | 分组 / 标签页可查看组内与带该标签的笔记；卡片组件抽为共享 `NoteCards.kt`（该版为原地展开，v1.2.1 改为二级页面） |
+| v1.2.1 | 改为独立二级页面（`group/{id}`、`tag/{id}` 路由 + `NoteCollectionScreen`）；修「点开看一眼就返回会被无条件刷新 `updated_at`」 |
+| v1.3.0 | 局域网同步：一主多从、主机内嵌 HTTP 服务（手写 ServerSocket）、双接口、双向增量、时间戳冲突裁决、共享密钥；数据库 2→3（`guid` 唯一索引 + 墓碑 + `sync_log`）；彻底删除改墓碑 |
+| v1.4.0 | 修「更多」页概览不刷新（改 Room Flow）；新增设置页（主题模式 / 动态取色 / 回收站定时清理） |
+| v1.5.0 | 多语言 + 品牌化：四语言界面（254 条文案抽成资源，API 33+ 用 per-app language）；改名 KnowNote / 碎片笔记 / 碎片筆記；图标补单色层；诊断信息统一英文；修译文里的 Kotlin 模板插值被原样写进资源 |
+| v1.6.0 | 可调阅读显示（字号五档、文字颜色七种）与检索范围勾选（标题 / 正文 / 标签）；检索与搜索历史忽略大小写 |
+| v1.7.0 | 阅读页单独调字号（倍率制）+ MD / 文本模式；编辑器选中文字可加粗体 / 斜体 / 字号 / 六色；修渲染器不递归解析行内内容 |
+| v1.8.0 | 正文插入图片：相册选择 → 私有目录缩放重编码 → 正文存 `img:` 引用；图片独占整行；图片随同步传输（同一张只传一次） |
+| v1.9.0 | 图片参与局域网同步：协议升到 2（base64 承载，单批最多 6 张 / 4MB，多轮传完）；同步日志带图片收发张数 |
+| v1.10.0 | 定时自动同步（设备侧 WorkManager）+ Termux 同步中心（纯标准库，可主动轮询各设备）；同步会话加串行闸；设备状态落库 |
+| v1.10.1 | 只在局域网里同步（从机 / 主机 / 中心三处拦截），定时任务约束收紧到 `UNMETERED` 并改用 `UPDATE` 覆盖 |
+| v1.10.2 | 同步改为双向库存比对（协议 3）：请求与响应带全量库存，两端同一纯函数算差集，正文按 `want_guids` 点名传输，水位线降级为快路径 |
 
-采用 [MIT 协议](LICENSE)：可自由使用、修改、分发，保留版权声明即可。
+## 下一步
+
+1. **同步加固**：主机改用前台 Service（常驻通知）以长期待命；上 TLS 或预共享密钥加密解决局域网窃听；跨网段场景支持自选静态地址
+2. **设备发现**：接入 NSD / mDNS 自动发现主机，免去手填 IP
+3. **冲突体验**：在同步日志中列出被裁决的条目，并提供「查看对端版本」入口
+4. **检索**：数据量上升后评估内置 SQLite（`requery/sqlite-android`）以启用 FTS5 与自定义分词器
+5. **导出**：导出范围选择（分组 / 标签 / 时间）与导入
+6. **墓碑增长**：`is_purged=1` 的行长期保留（删除可同步的前提），需要「墓碑保留期」—— 确认所有从机水位线越过后再真删
+
+## 许可
+
+[MIT](LICENSE)。
