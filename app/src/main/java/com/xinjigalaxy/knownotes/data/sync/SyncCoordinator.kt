@@ -88,9 +88,11 @@ class SyncCoordinator(
         }
 
         var watermark = repo.lastSyncAt()
-        // 笔记只在第一轮传：后面几轮纯粹是为了把图片传完
+        // 第一轮先把「水位线之后的变更」带上当快路径（常见情况正好是对方要的）。
+        // 真正的差集不再依赖它：双方各报一份全量库存，对方缺什么由库存比出来，
+        // 缺的那些要么这一轮就在 notes 里，要么下一轮由 want_guids 点名要。
         var pendingNotes = engine.collectChanges(watermark)
-        val notesToPush = pendingNotes.size
+        var notesToPush = pendingNotes.size
 
         var rounds = 0
         var imagesPushed = 0
@@ -114,6 +116,7 @@ class SyncCoordinator(
                 key = key,
                 lastSyncAt = watermark,
                 notes = pendingNotes,
+                inventory = engine.inventory(),
                 imagesIHave = imageStore.names().toList(),
                 images = images,
             )
@@ -150,15 +153,22 @@ class SyncCoordinator(
 
             // 水位线取「主机时间」与「本机时间」里较小的那个：
             // 宁可下次多要一点（重复应用是幂等的），也不能因为两台设备时钟有偏差而漏掉变更。
+            // 协议 3 起它只是快路径与界面显示，差集由库存比对决定，所以它偏了也不会漏数据。
             watermark = minOf(serverTime, System.currentTimeMillis())
             repo.setLastSyncAt(watermark)
             repo.rememberPeer(peerKey)
 
-            pendingNotes = emptyList()
+            // 下一轮发什么：对方点名的 ∪ 我从它的库存里算出来「它缺 / 它旧」的。
+            // 算两遍是刻意的冗余 —— 对端换了实现（比如 Termux 上的中心）也不会漏。
+            val wanted = LinkedHashSet<String>(response.wantGuids)
+            wanted += SyncDiff.peerNeeds(engine.inventory(), response.inventory)
+            pendingNotes = engine.notesFor(wanted)
+            notesToPush += pendingNotes.size
 
-            // 还有「本机有、对端集合里没有」的图吗？有就再来一轮（单次请求有张数上限）
+            // 还有要发的笔记，或还有「本机有、对端集合里没有」的图，就再来一轮（单次请求都有上限）
             val stillMissingAtPeer = imageStore.names() - response.imagesIHave.toSet()
-            if (stillMissingAtPeer.isEmpty() || rounds >= MAX_IMAGE_ROUNDS) break
+            val more = pendingNotes.isNotEmpty() || stillMissingAtPeer.isNotEmpty()
+            if (!more || rounds >= MAX_ROUNDS) break
         }
 
         repo.logSync(
@@ -193,8 +203,11 @@ class SyncCoordinator(
     }
 
     private companion object {
-        /** 一次同步最多发几轮（多了就是把图片留到下次，别让用户干等）。 */
-        const val MAX_IMAGE_ROUNDS = 4
+        /**
+         * 一次同步最多几轮：笔记差集一轮、图片每轮有张数/字节上限，都要靠多轮传完。
+         * 5 轮足够（正常是 1~2 轮），多出来的只是防止对端实现异常时来回打转。
+         */
+        const val MAX_ROUNDS = 5
     }
 }
 

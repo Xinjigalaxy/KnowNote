@@ -38,6 +38,8 @@ demo-shots/
 # 三个都不进公开仓库（样例配置是 hub.conf.example.json）。
 server/hub.conf.json
 server/hub.conf.*.json
+# …但样例配置本身要进仓库（它不含密钥，key 是空的）
+!server/hub.conf.example.json
 server/knownote-hub.db*
 server/images/
 server/hub.pid

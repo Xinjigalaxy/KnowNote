@@ -94,7 +94,7 @@
     <string name="notes_deleted_by_long_press_land_here_first">長按刪除的筆記會先放到這裡</string>
     <string name="supports_json_csv_db">支援 .json / .csv / .db 三種格式</string>
     <string name="lan_sync">區域網路同步</string>
-    <string name="phase_3_one_host_with_many_clients_incremental_c">第三階段實作：一主多從 + 增量變更日誌</string>
+    <string name="phase_3_one_host_with_many_clients_incremental_c">第三階段實作：一主多從 + 庫存雙向比對</string>
     <string name="settings">設定</string>
     <string name="theme_mode_dynamic_color_scheduled_trash_cleanup">主題模式 / 動態取色 / 回收筒定時清理</string>
     <string name="about">關於</string>

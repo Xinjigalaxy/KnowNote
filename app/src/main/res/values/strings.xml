@@ -90,7 +90,7 @@
     <string name="notes_deleted_by_long_press_land_here_first">Notes deleted by long press land here first</string>
     <string name="supports_json_csv_db">Supports .json / .csv / .db</string>
     <string name="lan_sync">LAN sync</string>
-    <string name="phase_3_one_host_with_many_clients_incremental_c">Phase 3: one host with many clients + incremental change log</string>
+    <string name="phase_3_one_host_with_many_clients_incremental_c">Phase 3: one host with many clients + two-way inventory diff</string>
     <string name="settings">Settings</string>
     <string name="theme_mode_dynamic_color_scheduled_trash_cleanup">Theme mode / dynamic color / scheduled trash cleanup</string>
     <string name="about">About</string>

@@ -388,6 +388,9 @@ class NoteRepository(
 
     suspend fun noteById(id: Long): Note? = noteDao.byId(id)
     suspend fun noteByGuid(guid: String): Note? = noteDao.byGuid(guid)
+
+    /** 全量笔记（含墓碑），同步的库存比对用。 */
+    suspend fun allNotesForSync(): List<Note> = noteDao.allForSync()
     suspend fun tagNames(noteId: Long): List<String> = noteDao.tagNamesOf(noteId)
     suspend fun groupNameOf(groupId: Long?): String? = groupId?.let { groupDao.byId(it)?.name }
     suspend fun groupIdByName(name: String): Long? = groupDao.byName(name)?.id

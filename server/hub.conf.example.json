@@ -1,0 +1,32 @@
+{
+  "_说明": "KnowNote 同步中心配置样例。复制成 hub.conf.json 再改，或者直接跑 `python knownote_hub.py --init-config hub.conf.json` 生成一份带随机密钥的。",
+  "device_name": "KnowNote Hub (Termux)",
+  "device_id": "hub-termux-01",
+  "bind": "0.0.0.0",
+  "port": 8765,
+  "key": "",
+  "_key_说明": "手机要连本中心时用的共享密钥（手机『局域网同步』页里那个）。留空会拒绝启动 —— 一个谁都能读走全部笔记的服务比忘记开同步更危险；所以样例故意留空，用 `--init-config` 生成随机密钥，或自己填一个。",
+  "lan_only": true,
+  "_lan_only_说明": "只在局域网里服务（默认开）：来源网段不对的请求一律 403，隧道/反代进来的按 CF-Connecting-IP / X-Forwarded-For 里的真实来源判断；bind 指向公网地址或本机没连局域网时直接拒绝启动。确实要跨网段用才改成 false。",
+  "db": "knownote-hub.db",
+  "images_dir": "images",
+  "log_file": "hub.log",
+  "interval_seconds": 300,
+  "_interval_说明": "定时轮询间隔（秒），最小 30。中心每这么久主动连一次下面列出的设备。",
+  "poll_on_start": true,
+  "devices": [
+    {
+      "name": "我的平板",
+      "host": "192.168.1.7",
+      "port": 8765,
+      "key": "",
+      "_说明": "手机要开着『主机模式』中心才连得上；address 也可以写成 \"192.168.1.7:8765\"。key 留空 = 与顶层 key 相同。",
+      "enabled": true
+    },
+    {
+      "name": "备用手机",
+      "address": "192.168.1.9:8765",
+      "enabled": false
+    }
+  ]
+}

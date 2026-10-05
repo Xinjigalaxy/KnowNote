@@ -40,6 +40,7 @@ class SyncClient(
         key: String,
         lastSyncAt: Long,
         notes: List<SyncNote>,
+        inventory: List<NoteEntry> = emptyList(),
         imagesIHave: List<String> = emptyList(),
         images: List<SyncImage> = emptyList(),
     ): Outcome = withContext(Dispatchers.IO) {
@@ -49,6 +50,7 @@ class SyncClient(
                 deviceName = deviceName,
                 lastSyncAt = lastSyncAt,
                 notes = notes,
+                inventory = inventory,
                 imagesIHave = imagesIHave,
                 images = images,
             ).toJson().toString()

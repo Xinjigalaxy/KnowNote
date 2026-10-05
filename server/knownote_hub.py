@@ -62,10 +62,10 @@ from typing import Dict, List, Optional, Sequence, Set, Tuple
 # 协议常量（必须与 app/src/main/java/.../data/sync/SyncModels.kt 一字不差）
 # ---------------------------------------------------------------------------
 
-SYNC_PROTOCOL = 2
+SYNC_PROTOCOL = 3
 MAX_SYNC_IMAGES = 6
 MAX_SYNC_IMAGE_BYTES = 4 * 1024 * 1024
-MAX_IMAGE_ROUNDS = 4
+MAX_ROUNDS = 5
 SYNC_DEFAULT_PORT = 8765
 
 # 服务端自己的上限：一次 HTTP 请求体最多多少字节（协议上限约 4MB 图片 + 笔记 JSON）
@@ -87,6 +87,20 @@ IMAGE_NAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._\-]{0,119}$")
 
 def now_ms() -> int:
     return int(time.time() * 1000)
+
+
+def fnv1a32(text: str) -> str:
+    """
+    FNV-1a 32 位（8 位小写十六进制）。
+
+    必须与 App 的 `fnv1a32()` 逐位一致 —— 它不是密码学哈希，只是「同一份内容要得到同一个短指纹」，
+    让库存比对不必传输正文。两侧各有一条固定输入的测试钉住它（对不上会立刻红）。
+    """
+    h = 0x811C9DC5
+    for byte in text.encode("utf-8"):
+        h = (h ^ byte) & 0xFFFFFFFF
+        h = (h * 0x01000193) & 0xFFFFFFFF
+    return "%08x" % h
 
 
 def log(message: str) -> None:
@@ -184,6 +198,104 @@ class SyncNote:
 
 
 @dataclass(frozen=True)
+class NoteEntry:
+    """
+    一条笔记的库存条目：身份 + 版本指纹，不含正文（与 App 的 NoteEntry 同形）。
+
+    为什么要有它：光靠水位线判断「你需要哪些」有洞 —— 一台已同步过的设备换了个新对端时，
+    水位线是「和上一个对端同步到哪」，于是整库笔记只会推过去「上次同步之后改的那几条」。
+    改成双方各报一份全量库存、由指纹比出真正的差集，就与水位线、时钟、上次和谁同步过全都无关。
+    """
+
+    guid: str
+    updated_at: int
+    is_purged: bool
+    hash: str
+
+    @staticmethod
+    def of(note: SyncNote) -> "NoteEntry":
+        return NoteEntry(
+            guid=note.guid,
+            updated_at=note.updated_at,
+            is_purged=note.is_purged,
+            hash=fnv1a32(note.canonical()),
+        )
+
+    def to_json(self) -> dict:
+        return {
+            "g": self.guid,
+            "u": self.updated_at,
+            "p": 1 if self.is_purged else 0,
+            "h": self.hash,
+        }
+
+    @staticmethod
+    def from_json(obj) -> Optional["NoteEntry"]:
+        if not isinstance(obj, dict):
+            return None
+        guid = obj.get("g")
+        if not isinstance(guid, str) or not guid:
+            return None
+        return NoteEntry(
+            guid=guid,
+            updated_at=_int_or(obj.get("u"), 0),
+            is_purged=_int_or(obj.get("p"), 0) == 1,
+            hash=str(obj.get("h") or ""),
+        )
+
+
+def parse_inventory(raw) -> List[NoteEntry]:
+    """坏条目直接跳过 —— 不让一条脏数据打断整次同步。"""
+    if not isinstance(raw, list):
+        return []
+    out = []
+    for item in raw:
+        entry = NoteEntry.from_json(item)
+        if entry is not None:
+            out.append(entry)
+    return out
+
+
+def inventory_to_json(entries: Sequence[NoteEntry]) -> List[dict]:
+    return [e.to_json() for e in entries]
+
+
+class SyncDiff:
+    """
+    库存比对（协议 3）。规则与 App 的 `SyncDiff` 一字不差：两侧各算一遍，得到同一个差集。
+
+    - 对方这一条落后于我（它没有 / 它更旧 / 时间戳打平但指纹不同）→ 我发给它；
+    - 反过来就是我该向它要的（我没有 / 它更新）。
+    """
+
+    @staticmethod
+    def _peer_is_behind(mine: NoteEntry, theirs: Optional[NoteEntry]) -> bool:
+        if theirs is None:
+            return True
+        if mine.updated_at != theirs.updated_at:
+            return mine.updated_at > theirs.updated_at
+        return mine.hash != theirs.hash
+
+    @staticmethod
+    def peer_needs(mine: Sequence[NoteEntry], theirs: Sequence[NoteEntry]) -> List[str]:
+        index = {e.guid: e for e in theirs}
+        return sorted(e.guid for e in mine if SyncDiff._peer_is_behind(e, index.get(e.guid)))
+
+    @staticmethod
+    def i_want(mine: Sequence[NoteEntry], theirs: Sequence[NoteEntry]) -> List[str]:
+        index = {e.guid: e for e in mine}
+        out = []
+        for entry in theirs:
+            local = index.get(entry.guid)
+            # 我没有、它那边只有一块墓碑：要过来也是一条无需落地的删除通知
+            if local is None and entry.is_purged:
+                continue
+            if SyncDiff._peer_is_behind(entry, local):
+                out.append(entry.guid)
+        return sorted(out)
+
+
+@dataclass(frozen=True)
 class SyncImage:
     name: str
     data: bytes
@@ -224,6 +336,7 @@ class SyncRequest:
     device_name: str
     last_sync_at: int
     notes: List[SyncNote] = field(default_factory=list)
+    inventory: List[NoteEntry] = field(default_factory=list)
     images_i_have: List[str] = field(default_factory=list)
     images: List[SyncImage] = field(default_factory=list)
 
@@ -233,6 +346,7 @@ class SyncRequest:
             "device_id": self.device_id,
             "device_name": self.device_name,
             "last_sync_at": self.last_sync_at,
+            "inventory": inventory_to_json(self.inventory),
             "notes": [n.to_json() for n in self.notes],
             "images_i_have": list(self.images_i_have),
             "images": [i.to_json() for i in self.images],
@@ -253,6 +367,7 @@ class SyncRequest:
             device_name=str(obj.get("device_name") or "Unnamed device"),
             last_sync_at=int(obj.get("last_sync_at") or 0),
             notes=notes,
+            inventory=parse_inventory(obj.get("inventory")),
             images_i_have=have,
             images=parse_images(obj.get("images")),
         )
@@ -266,6 +381,8 @@ class SyncResponse:
     notes: List[SyncNote] = field(default_factory=list)
     applied_notes: int = 0
     conflicts: int = 0
+    inventory: List[NoteEntry] = field(default_factory=list)
+    want_guids: List[str] = field(default_factory=list)
     images_i_have: List[str] = field(default_factory=list)
     images: List[SyncImage] = field(default_factory=list)
     images_received: int = 0
@@ -278,6 +395,8 @@ class SyncResponse:
             "server_time": self.server_time,
             "applied_notes": self.applied_notes,
             "conflicts": self.conflicts,
+            "inventory": inventory_to_json(self.inventory),
+            "want_guids": list(self.want_guids),
             "notes": [n.to_json() for n in self.notes],
             "images_i_have": list(self.images_i_have),
             "images": [i.to_json() for i in self.images],
@@ -301,6 +420,8 @@ class SyncResponse:
             notes=notes,
             applied_notes=int(obj.get("applied_notes") or 0),
             conflicts=int(obj.get("conflicts") or 0),
+            inventory=parse_inventory(obj.get("inventory")),
+            want_guids=[str(x) for x in (obj.get("want_guids") or []) if isinstance(x, str)],
             images_i_have=have,
             images=parse_images(obj.get("images")),
             images_received=int(obj.get("images_received") or 0),
@@ -491,6 +612,21 @@ class HubStore:
         with self._lock:
             row = self._conn.execute("SELECT * FROM notes WHERE guid = ?", (guid,)).fetchone()
             return self._row_to_note(row) if row else None
+
+    def all_notes(self) -> List[SyncNote]:
+        """全量（含墓碑）—— 库存比对用。与 App 的 `allNotesForSync()` 同一个口径。"""
+        with self._lock:
+            rows = self._conn.execute("SELECT * FROM notes ORDER BY guid").fetchall()
+            return [self._row_to_note(row) for row in rows]
+
+    def notes_by_guids(self, guids: Sequence[str]) -> List[SyncNote]:
+        out: List[SyncNote] = []
+        with self._lock:
+            for guid in guids:
+                row = self._conn.execute("SELECT * FROM notes WHERE guid = ?", (guid,)).fetchone()
+                if row is not None:
+                    out.append(self._row_to_note(row))
+        return out
 
     def write_note(self, note: SyncNote, origin_device: Optional[str] = None) -> str:
         """
@@ -688,6 +824,14 @@ class SyncEngine:
 
     def collect_changes(self, since: int) -> List[SyncNote]:
         return self.store.collect_changes(since)
+
+    def inventory(self) -> List[NoteEntry]:
+        """全量库存（含墓碑）：身份 + 版本指纹，不含正文。差集判定必须基于全量。"""
+        return [NoteEntry.of(note) for note in self.store.all_notes() if note.guid]
+
+    def notes_for(self, guids: Sequence[str]) -> List[SyncNote]:
+        """按 guid 取正文（对方点名要的那几条）。中途被删的跳过即可，下次库存比对会再纠正。"""
+        return self.store.notes_by_guids(list(guids))
 
     def apply_changes(self, remote: Sequence[SyncNote], origin_device: Optional[str] = None) -> dict:
         """
@@ -1162,8 +1306,19 @@ class Hub:
         """
         images_received = self.engine.apply_images(body.images)
         outbound_images = self.engine.outgoing_images(set(body.images_i_have))
-        outbound = self.engine.collect_changes(body.last_sync_at)
+
+        # 笔记（协议 3）：按**库存比差集**，不再看水位线 ——
+        # 对方报来它持有的全部 guid + 版本指纹，我比出「它没有 / 它更旧」的那些发给它。
+        # 顺序仍是「先算要发的、再收对方推来的」：虽然指纹比对本身不会再回声，
+        # 但先收会让「刚收到的」立刻变成「它不落后于我」，计数与日志都会错。
+        before = self.engine.inventory()
+        outbound = self.engine.notes_for(SyncDiff.peer_needs(before, body.inventory))
         applied = self.engine.apply_changes(body.notes, origin_device=body.device_id)
+
+        # 收完之后再算「我还缺它什么」，刚收到的那几条自然不会再被点名。
+        # 没落库任何东西时（绝大多数同步）复用同一份库存，省一遍全表扫描。
+        after = before if applied["changed"] == 0 else self.engine.inventory()
+        want_guids = SyncDiff.i_want(after, body.inventory)
 
         self.store.log_sync(
             role="host",
@@ -1172,8 +1327,8 @@ class Hub:
             pushed=applied["changed"],
             conflicts=applied["conflicts"],
             ok=True,
-            message="device %s connected, images +%d/-%d"
-            % (body.device_id[:8], images_received, len(outbound_images)),
+            message="device %s connected, inventory %d, asked for %d, images +%d/-%d"
+            % (body.device_id[:8], len(body.inventory), len(want_guids), images_received, len(outbound_images)),
         )
         self.store.save_device_state({
             "address": "client:" + remote_ip,
@@ -1200,6 +1355,8 @@ class Hub:
             notes=outbound,
             applied_notes=applied["changed"],
             conflicts=applied["conflicts"],
+            inventory=after,
+            want_guids=want_guids,
             images_i_have=sorted(self.images.names()),
             images=outbound_images,
             images_received=images_received,
@@ -1247,6 +1404,7 @@ class Hub:
                 device_name=self.config.device_name,
                 last_sync_at=watermark,
                 notes=pending,
+                inventory=self.engine.inventory(),
                 images_i_have=sorted(self.images.names()),
                 images=images,
             )
@@ -1290,19 +1448,25 @@ class Hub:
             self.store.save_peer_images(peer_key, response.images_i_have)
 
             # 水位线 = min(设备时间, 中心时间)：宁可下次多要一点（重复应用是幂等的），
-            # 也不因为两台机器时钟有偏差而漏掉变更。设备时间用在设备自己的时钟域里，是对的。
+            # 也不因为两台机器时钟有偏差而漏掉变更。协议 3 起它只是快路径，差集由库存比对决定。
             watermark = min(response.server_time, now_ms())
             self.store.kv_set("wm:" + peer_key, str(watermark))
 
-            pending = []
+            # 下一轮发什么：对方点名的 ∪ 我从它的库存里算出来「它缺 / 它旧」的。
+            # 两端各算一遍是刻意的冗余 —— 对面是 App 还是另一个中心都能对上。
+            wanted = set(response.want_guids)
+            wanted.update(SyncDiff.peer_needs(self.engine.inventory(), response.inventory))
+            pending = self.engine.notes_for(sorted(wanted))
+            notes_to_push += len(pending)
+
             # 还有图没传完就再来一轮：单次请求有张数/字节两道闸。
             # App 的客户端只按「对端缺我的图」续轮，所以 App↔App 拉一堆图要再点一次同步；
             # 中心是常驻服务器，顺手把「我还缺对端的图」也续上 —— 一次会话把图片补齐。
             peer_missing_mine = bool(self.images.names() - set(response.images_i_have))
             mine_missing_from_peer = bool(set(response.images_i_have) - self.images.names())
-            if rounds >= MAX_IMAGE_ROUNDS:
+            if rounds >= MAX_ROUNDS:
                 break
-            if not peer_missing_mine and not mine_missing_from_peer:
+            if not pending and not peer_missing_mine and not mine_missing_from_peer:
                 break
 
         stats.update(
@@ -1326,7 +1490,8 @@ class Hub:
             pushed=peer_applied,
             conflicts=conflicts,
             ok=True,
-            message="images +%d/-%d in %d round(s)" % (images_pulled, images_pushed, rounds),
+            message="notes pushed %d, images +%d/-%d in %d round(s)"
+            % (notes_to_push, images_pulled, images_pushed, rounds),
         )
         self.note(
             "[poll] %s 拉 %d 条 / 推 %d 条落库（冲突 %d）、图片 +%d/-%d、%d 轮"

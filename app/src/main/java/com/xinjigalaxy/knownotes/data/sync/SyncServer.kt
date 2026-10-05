@@ -162,12 +162,20 @@ class SyncServer(
                     // "我缺什么"完全由请求里的 images_i_have 决定 —— 服务端不存任何对端状态。
                     val imagesReceived = engine.applyImages(imageStore, request_.images)
                     val outboundImages = engine.outgoingImages(imageStore, request_.imagesIHave.toSet())
-                    // 先发：取「本次请求之前」本机的变更。
-                    // 顺序不能反 —— 反了就会把从机这次刚推上来的变更再回声给它自己
-                    // （虽然幂等不会出错，但计数会虚高、日志也说谎）。回环测试抓的就是这个。
-                    val outbound = engine.collectChanges(request_.lastSyncAt)
+
+                    // 笔记：协议 3 起不是「我自某个水位线之后的变更」，而是**按库存比差集** ——
+                    // 从机报来它持有的全部 guid + 版本指纹，我这边比出「它没有 / 它更旧」的那些发给它。
+                    // 这样一台老设备换了个新对端（水位线是跟上一个对端同步到哪）也不会只发出几条。
+                    val before = engine.inventory()
+                    val outbound = engine.notesFor(SyncDiff.peerNeeds(before, request_.inventory))
+
                     // 再收：把从机的变更按时间戳规则并进来（本机是主机 → 中转要记变更日志）
                     val applied = engine.applyChanges(request_.notes, originDevice = request_.deviceId)
+
+                    // 收完之后再算「我还缺它什么」，刚收到的那几条自然不会再被点名。
+                    // 没有落库任何东西时（绝大多数同步）复用同一份库存，省一遍全表扫描。
+                    val after = if (applied.changed == 0) before else engine.inventory()
+                    val wantGuids = SyncDiff.iWant(after, request_.inventory)
 
                     repo.logSync(
                         SyncLogEntry(
@@ -178,6 +186,7 @@ class SyncServer(
                             conflicts = applied.conflicts,
                             ok = true,
                             message = "device ${request_.deviceId.take(8)} connected, " +
+                                "inventory ${request_.inventory.size}, asked for ${wantGuids.size}, " +
                                 "images +$imagesReceived/-${outboundImages.size}",
                         )
                     )
@@ -194,6 +203,8 @@ class SyncServer(
                             notes = outbound,
                             appliedNotes = applied.changed,
                             conflicts = applied.conflicts,
+                            inventory = after,
+                            wantGuids = wantGuids,
                             imagesIHave = imageStore.names().toList(),
                             images = outboundImages,
                             imagesReceived = imagesReceived,

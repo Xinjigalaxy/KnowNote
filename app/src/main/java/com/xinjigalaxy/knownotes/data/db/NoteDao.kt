@@ -35,6 +35,13 @@ interface NoteDao {
     @Query("SELECT * FROM notes WHERE is_purged = 0 ORDER BY updated_at DESC")
     suspend fun allOnce(): List<Note>
 
+    /**
+     * 全量（含墓碑）—— 同步的库存比对用。
+     * 与 [allOnce] 的区别就是带上 `is_purged = 1` 的行：删除也要参与比对，否则对端会把它推回来。
+     */
+    @Query("SELECT * FROM notes WHERE guid != '' ORDER BY id ASC")
+    suspend fun allForSync(): List<Note>
+
     @Query("SELECT * FROM notes WHERE guid = :guid LIMIT 1")
     suspend fun byGuid(guid: String): Note?
 

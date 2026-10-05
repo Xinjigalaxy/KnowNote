@@ -43,6 +43,34 @@ class SyncEngine(private val repo: NoteRepository) {
         return out
     }
 
+    /**
+     * 本机的**全量库存**（协议 3）：每条笔记的身份 + 版本指纹，不含正文。
+     *
+     * 与 [collectChanges] 的区别是「不求增量、要全量」—— 差集判定必须基于全量，
+     * 否则换了对端（或对端换了个新库）时，只有水位线之后动过的那几条能被看见。
+     */
+    suspend fun inventory(): List<NoteEntry> = repo.allNotesForSync()
+        .filter { it.guid.isNotBlank() }
+        .map { note ->
+            val wire = toSyncNote(note)
+            NoteEntry(
+                guid = wire.guid,
+                updatedAt = wire.updatedAt,
+                isPurged = wire.isPurged,
+                hash = fnv1a32(wire.canonical()),
+            )
+        }
+
+    /** 按 guid 取正文（对方点名要的那几条）。中途被删掉的跳过即可 —— 下次同步的库存比对会再纠正。 */
+    suspend fun notesFor(guids: Collection<String>): List<SyncNote> {
+        val out = ArrayList<SyncNote>(guids.size)
+        for (guid in guids.distinct()) {
+            val note = repo.noteByGuid(guid) ?: continue
+            out += toSyncNote(note)
+        }
+        return out
+    }
+
     /** 应用远端变更。originDevice 非空 = 本机是主机、正在中转（会记变更日志给别的从机）。 */
     suspend fun applyChanges(remote: List<SyncNote>, originDevice: String? = null): ApplyResult {
         var inserted = 0

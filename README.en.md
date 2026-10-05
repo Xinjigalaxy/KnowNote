@@ -47,7 +47,7 @@ Notes + tags + groups, full-text search over the note body, Markdown preview, a 
 # JDK 17 + Android SDK (point local.properties at your SDK; it is not committed)
 ./gradlew :app:assembleDebug            # app/build/outputs/apk/debug/app-debug.apk
 ./gradlew :app:installDebug             # install on a connected device
-./gradlew :app:testDebugUnitTest        # unit tests (58)
+./gradlew :app:testDebugUnitTest        # unit tests (62)
 ./gradlew :app:connectedDebugAndroidTest # instrumented tests (50, needs a device/emulator)
 
 # Sync hub (the server side; runs on Termux or any PC, Python 3 standard library only)
@@ -110,10 +110,18 @@ press sync. One request carries both directions.
   response carries the host's changes.
 
 The wire format never contains local row ids: notes are identified by a `guid`, groups and tags by **name**,
-so no id-mapping table is needed. Incremental sync rides on a change log plus a watermark; after a
-successful sync the watermark becomes `min(host clock, local clock)` so clock skew can only cause a
-redundant re-send, never a missed change. Conflicts go to the newer `updated_at`; equal timestamps resolve
-to the larger canonical string so both sides converge instead of fighting forever.
+so no id-mapping table is needed. Conflicts go to the newer `updated_at`; equal timestamps resolve to the
+larger canonical string so both sides converge instead of fighting forever.
+
+**The difference itself is computed from a full inventory (v1.10.2, protocol 3).** Every round carries each
+side's *inventory* — `guid`, `updated_at`, the tombstone bit and a content fingerprint (wire keys
+`g/u/p/h`), never the body — and both ends run the same pure function (`SyncDiff` in Kotlin and in the hub,
+bit-identical) to derive *what to send* and *what to ask for*. A body travels only when the other side names
+its guid in `want_guids`, so a normal exchange is either one round (nothing differs) or two (diff, then the
+bodies that were named). The watermark survives as a one-round shortcut and a UI readout: **correctness no
+longer depends on it** — a peer swap, a stale watermark or skewed clocks cannot drop notes. That is exactly
+the bug this replaced: the old watermark-only inference gave a brand-new peer only a handful of notes when
+the old device's watermark had already been advanced by a *different* peer.
 
 **"Delete permanently" leaves a tombstone** (`is_purged = 1`) rather than removing the row — otherwise the
 other device would happily sync the note back.
@@ -183,9 +191,9 @@ like the app host, and it is a single-process server — fine for a handful of d
 | Check | Result |
 | --- | --- |
 | `assembleDebug` / `assembleRelease` | BUILD SUCCESSFUL |
-| Unit tests | **58/58** (55 before; `LanAddressTest` adds 3 — and writing it immediately caught that `[fd00::1]:8765`, the bracketed IPv6 form, was not handled: fixed) |
-| Instrumented tests (Android 13 / SQLite 3.32.2, emulator) | **50/50** (47 before) |
-| Instrumented tests (Android 15 / SQLite 3.44.3, emulator) | **50/50** |
+| Unit tests | **58/58** (v1.10.1; 55 before; `LanAddressTest` adds 3 — and writing it immediately caught that `[fd00::1]:8765`, the bracketed IPv6 form, was not handled: fixed) |
+| Instrumented tests (Android 13 / SQLite 3.32.2, emulator) | **57/57** (52 before; see the v1.10.2 rows below) |
+| Instrumented tests (Android 15 / SQLite 3.44.3, emulator) | **57/57** |
 | LAN-only: "not a single request" is actually verified | the instrumented test asserts the **host received 0 requests**, not just the return value — an empty session also "succeeds", so asserting the result alone proves nothing |
 | LAN-only: *skipped*, never *retry* or *failure* | blocked runs return `success` and record `skipped:` — `retry` would burn battery backing off while away from home, `failure` would cancel the periodic work (the v1.10.0 pitfall) |
 | LAN-only: not even woken on cellular | the periodic work's constraint is asserted to be `NetworkType.UNMETERED`, and the self-heal enqueue now uses `UPDATE` (with `KEEP` the constraint already scheduled on an existing install never changes) |
@@ -195,10 +203,18 @@ like the app host, and it is a single-process server — fine for a handful of d
 | UI on the real tablet | the new hint under the client block and the host card's "refused N connections from outside the LAN" were both checked on the real tablet; four languages, no layout breakage |
 | Overwrite install (tablet, Android 16 / SDK 36) | 1.10.0 → 1.10.1 in place, backed up first: `user_version` 3 and every count (notes / tags / groups / change log) **identical**, the `notes` content hash unchanged, preference file and images byte-identical, `firstInstallTime` unchanged (only `lastUpdateTime` moved), the launch counter matches the real number of notes |
 | Real tunnel check (closest to "someone actually connecting from outside") | pointed the home Cloudflare tunnel (`example.com`) at the hub and hit it for real: with `lan_only:true`, `https://example.com/ping` returned **403**, the hub logging *refusing a request from outside the local network: the real origin in the proxy header, 203.0.113.7, is not on the local network*. The tunnel reports the connection as coming from 127.0.0.1 while the real client sits in `CF-Connecting-IP`, and that header is exactly what gets judged. With `lan_only:false` the same URL returned **200** — the control proving the rule, not something else, is what blocked it. Temp config deleted afterwards, the tunnel config is back to its original target |
-| Hub tests (`python -m unittest discover -s server/tests`) | **41/41**: protocol (401 / 404 / 429 throttle / bad JSON / protocol version over real HTTP), engine (increments, conflict convergence, tombstones, images sent once, multi-round), polling (two-way, idempotent, failure reasons, watermark = min clock), persisted device state, LAN-only enforcement (public sources and public peers behind proxy headers get 403 without touching any data, private sources pass, the switch turns it off, a public `bind` refuses to start) |
+| Diff over real sockets (v1.10.2, protocol 3): hub ⇄ hub | Termux hub (fresh DB) pulled **3 notes** in round 1, then `0/0` in **1 round** (inventories identical); a note created on the Termux side was then pushed as `1` in 2 rounds — one to name it, one to send it. Over the real LAN (192.168.1.7 ⇄ 192.168.1.9), two independent Python hubs |
+| Diff over real sockets (v1.10.2, protocol 3): hub ⇄ real app | `--check` → `✓ Android 模拟器, protocol 3`; polling the app's host mode through `adb forward`: the app **named the hub's 2 notes in `want_guids`** and received them in round 2 (checked inside the app's own DB: `user_version` 3, both `pc-to-app-*` rows present, its `sync_log` reads `host · 推 2`), then a steady `0/0` in 1 round |
+| Unit tests | **62/62** (58 before; `SyncDiffTest` adds 4: peer missing / local newer / timestamp tie with a different fingerprint / tombstones, plus the pinned hash values) |
+| Instrumented tests (Android 13 / Android 15) | **57/57** (52 before; 5 new: a fresh host still receives the whole library when the client's watermark was already advanced, a deletion travels with no pending delta, wire-struct round trip, and the golden-JSON contract below) |
+| The two implementations' fingerprints must agree bit for bit | `fnv1a32` is asserted with the same input and the same expectation in Kotlin and in Python (`551d9a74`, `04a770bf`). One bit off and both sides believe "content differs" forever, re-sending bodies every round |
+| The two implementations' key names must agree character for character | one golden JSON, half-pinned on each side: Python asserts its generator emits exactly that string, Kotlin asserts that string parses into inventory / want_guids / notes. This covers the one direction a live run cannot reach (the app as *client* reading the hub's response) |
+| A bug found while verifying the above | protocol 3's `inventory` / `want_guids` had been added to the *request* parser but forgotten in the hub's response parser. Not wrong data — a whole-library re-send every round, visible as "5 rounds" in the real Termux ⇄ PC hub log. Fixed; the steady state is back to 1 round, with two regressions added (wire-struct round trip + explicit round-count assertions) |
+| The v1.10.1 LAN guard still holds | on an emulator with only mobile data available, the app recorded `Sync blocked: the device is not on a local network (mobile data?)` — and sent **not a single request** |
+| Hub tests (`python -m unittest discover -s server/tests`) | **50/50**: protocol (401 / 404 / 429 throttle / bad JSON / protocol version over real HTTP), engine (increments, conflict convergence, tombstones, images sent once, multi-round), polling (two-way, idempotent, failure reasons, watermark = min clock), persisted device state, LAN-only enforcement (public sources and public peers behind proxy headers get 403 without touching any data, private sources pass, the switch turns it off, a public `bind` refuses to start) |
 | Cross-implementation ①: hub polls the app | hub `--check` → `✓ Android 模拟器, protocol 2`; one `--once` round **pulled 8 notes from the app and pushed 2 back**; app DB 8 → 10 notes with groups/tags matched by name |
 | Cross-implementation ②: app syncs to the hub | a note created on the hub appeared on the emulator after flipping the *Scheduled auto sync* switch (10 → **11 notes**, card shows "last auto sync: just now · success"); the app pushed its 10 notes and the hub applied 0 — idempotent convergence |
-| Hub tests **on a real Termux** (Android 11 手机, Termux's own Python 3.14.6, arm64) | **41/41 OK** — no dependencies, no compiling: `pkg install python`, then `python3 -m unittest discover -s tests -t .`, no root and not a single third-party package |
+| Hub tests **on a real Termux** (Android 11 手机, Termux's own Python 3.14.6, arm64) | **50/50 OK** — no dependencies, no compiling: `pkg install python`, then `python3 -m unittest discover -s tests -t .`, no root and not a single third-party package |
 | Cross-implementation ③: Termux hub ⇄ PC hub | both hubs see protocol 2; the Termux side pulled **12 notes** in one round and `0/0` the next (idempotent); `--status` shows `已同步过 …` |
 | Cross-implementation ④: Termux hub ⇄ the real app | the hub inside the phone's Termux reached the app (`Android 模拟器, protocol 2`), pulled 10 notes, then **pushed a note it had created itself** into the app (12 → 13 notes; the app's own sync log lists `Termux Hub (Android 11 手机) · 拉取 0 条 · 推送 1 条`). Full chain = Python in Termux on a real phone ⇄ a real Android app, over the same protocol |
 | Device state persisted for `--status` | the hub's `--status` (a separate process) reports `已同步过（…拉 11 / 推 0）` instead of the old always-"never synced" |
@@ -224,7 +240,7 @@ like the app host, and it is a single-process server — fine for a handful of d
 | v1.8.0 | **Images in the note body**: pick from the gallery, copied into app-private storage (downscaled and re-encoded), referenced as `![caption](img:filename)`. The renderer splits content into text and image blocks so an image always occupies a full line of its own; summaries show `[caption]`. Known gap: images do not travel through export or LAN sync yet |
 | v1.9.0 | **Images join LAN sync**: protocol bumped to 2; images ride along with the notes in the same request (base64, max 6 images / 4 MB per batch) and oversized sets are split across rounds automatically. Each device remembers what the peer already has, so a file is sent once; sync log reports image counts |
 | v1.10.1 | **LAN-only sync**: enforced in three places — the app as a client (never starts on mobile data or towards a public peer; not a single request leaves the device), the app as a host (a connection from outside the LAN gets 403, and the page shows how many were refused), and the hub (`lan_only`, on by default: non-private sources get 403, tunnels are judged by the real origin in `CF-Connecting-IP` / `X-Forwarded-For`, and a public `bind` or a machine with no LAN address refuses to start). The periodic job's network constraint tightened from *any network* to `UNMETERED`, and it now uses `UPDATE` so the new constraint actually replaces the one already scheduled on existing installs. Being blocked counts as *skipped*, never as retry or failure (a failing periodic job gets cancelled — the pitfall v1.10.0 documented). Four languages, unit + instrumented tests |
-
+| v1.10.2 | **Sync becomes a two-way inventory diff (protocol 3)** — fixes the real-device bug where a brand-new peer received only a handful of notes. The difference used to be *inferred* from a change log + watermark, and the watermark means "where I got to with the *previous* peer", so an old device reaching a new peer computed an empty delta. Now every request and response carries a full **inventory** (`guid` + `updated_at` + tombstone bit + content fingerprint, never the body), both ends derive the difference with the same pure function (Kotlin's `SyncDiff` and the hub's, bit-identical), and a body only travels after the peer names its guid in `want_guids`. The watermark is demoted to a one-round shortcut and a UI readout — **correctness no longer depends on it** |
 ## Roadmap
 
 1. **Harden sync** — foreground service with a persistent notification for the host (less urgent now that the

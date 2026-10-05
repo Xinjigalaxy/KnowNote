@@ -5,7 +5,7 @@
 手机不需要在后台跑定时任务，也不需要一直醒着。
 
 - 纯 Python 3 标准库，**零依赖、零编译**（Termux 里 `pkg install python` 就够，不用 pip）
-- 说的就是 App 那套线协议（`GET /ping` + `POST /sync`，协议版本 2），
+- 说的就是 App 那套线协议（`GET /ping` + `POST /sync`，协议版本 3），
   App 里「填地址 + 共享密钥」就能把中心当主机用，**不用装两个 App、不用改 App**
 - 两个角色都干：
   - **主机**：接待手机连过来（手机上点「开始同步」，或手机上开着定时自动同步）
@@ -159,8 +159,11 @@ WorkManager（最短 15 分钟，而且系统可以再推迟）。中心放在�
 
 | 位置 | App（Kotlin） | 中心（Python） |
 | --- | --- | --- |
-| 线格式 | `data/sync/SyncModels.kt` | `SyncNote` / `SyncImage` / `SyncRequest` / `SyncResponse` |
-| 增量 | `change_log` + `last_sync_at` → `at > since` | 同 |
+| 线格式 | `data/sync/SyncModels.kt` | `SyncNote` / `SyncImage` / `SyncRequest` / `SyncResponse` / `NoteEntry` |
+| 差集（协议 3 起） | 双方各报**全量库存**（`guid` + `updated_at` + 墓碑位 + 内容指纹 `g/u/p/h`），
+  用同一个纯函数 `SyncDiff.peerNeeds / iWant` 算「我发什么 / 我要什么」；正文只由对方 `want_guids` 点名后按 guid 传 |
+  同（`SyncDiff` 逐位一致，`fnv1a32` 有两侧同输入同期望值的断言） |
+| 增量（快路径） | `change_log` + `last_sync_at` → `at > since` | 同（**正确性不再依赖它**，只用来省一轮往返） |
 | 冲突 | `updated_at` 优先；打平取规范串较大者 | 同（`canonical()` 字段顺序一致） |
 | 主机顺序 | **先取要发的增量，再应用对端推来的** | 同（反了会把对方刚推的变更回声回去） |
 | 中转 | 主机收到从机变更时记一条 `change_log` | 同（中心是中转者，否则第二台设备拉不到） |
@@ -171,7 +174,7 @@ WorkManager（最短 15 分钟，而且系统可以再推迟）。中心放在�
 
 1. 打平改判时 App 只计「冲突」不计「落库条数」，中心两样都计 —— 否则日志里会写「推 0 条」而库里其实被改写了。
 2. App 的客户端一轮同步最多从主机拉 6 张图（剩下的要再点一次同步）；中心轮询时会续轮，
-   一次就把缺的图补齐（上限 4 轮）。
+   一次就把缺的图补齐（上限 5 轮）。
 
 ## 七、排错
 
@@ -181,9 +184,9 @@ WorkManager（最短 15 分钟，而且系统可以再推迟）。中心放在�
 | --- | --- |
 | `unreachable: ... 拒绝连接` | 手机不在同一 Wi-Fi、IP 变了、App 没开主机模式，或 App 进程被系统回收了 |
 | `401 Shared key mismatch` | 中心的 `devices[].key` 与手机上那个密钥不一致（手机上可重新生成，然后抄到配置里） |
-| `426 Protocol version mismatch` | 两边 App 版本不一致（协议版本 2 = App v1.9.0 及以上） |
+| `426 Protocol version mismatch` | 两边 App 版本不一致（协议版本 3 = App v1.10.2 及以上）。**协议 3 是断点**：v1.10.1 及更早的 App 与协议 3 的中心会互相回 426，App 与中心要一起升 |
 | `429 Too many failed attempts` | 刚才密钥错太多次，等 10 分钟或重启中心 |
-| 笔记同步了但图片没传 | 单批上限 6 张 / 4MB，等下一轮；中心端一次最多 4 轮 |
+| 笔记同步了但图片没传 | 单批上限 6 张 / 4MB，等下一轮；中心端一次最多 5 轮 |
 | 中心侧笔记数一直是 0 | 手机从来没连上过中心：要么手机上去点一次同步，要么中心 `check` 通了让轮询自己拉 |
 
 日志里三条最常看的行：
@@ -198,7 +201,7 @@ WorkManager（最短 15 分钟，而且系统可以再推迟）。中心放在�
 
 ```bash
 # 在仓库根目录
-python -m unittest discover -s server/tests -t . -v     # 41 个用例
+python -m unittest discover -s server/tests -t . -v     # 50 个用例
 # 或者
 python server/tests/test_hub.py
 # 在 Termux 里（说明零依赖：装完 python 就能这么跑）
@@ -207,13 +210,15 @@ cd server && python3 -m unittest discover -s tests -t .
 
 覆盖：协议（`/ping`、错密钥 401、协议 426、坏 JSON 400、404、限流 429、无密钥拒绝启动）、
 引擎（增量、时间戳优先、打平收敛、墓碑不外复活、未知 guid 的墓碑忽略）、
+库存差分（新对端拿全库、水位线推进后照样全推、**轮数与幂等**（稳态 1 轮、点名传正文 2 轮）、
+只传真差集、纯逻辑四个分支、墓碑不主动请求、线结构体写读往返、与 App 侧同一串黄金 JSON）、
 图片（双向传输、只传一次、单批张数/字节上限、路径穿越被拒）、
 调度（一轮双向、两台设备经中心中转、幂等、图片多轮补齐、连不上/密钥错的日志、水位线、定时线程按节拍跑）、
 设备状态落库（`--status` 是另一个进程，状态不能只放内存）、
 局域网限制（公网来源 / 代理头里的公网真身一律 403 且不改动任何数据、私有来源放行、关掉开关就放行、
 地址分类含运营商大内网与 IPv6、`bind` 指向公网地址时拒绝启动）。
 
-**真机验证**：在 Android 11 手机（Termux 自带 Python 3.14.6 / arm64）上跑 **41/41 通过**；
+**真机验证**：在 Android 11 手机（Termux 自带 Python 3.14.6 / arm64）上跑 **50/50 通过**（19.3 秒）；
 并做过两条跨实现链路 —— Termux 上的中心 ⇄ PC 上的中心（一轮拉 12 条，第二轮 0/0 幂等）、
 Termux 上的中心 ⇄ 模拟器里的真 App（先拉 10 条，再把它自己新建的那条推给 App）。
 

@@ -94,7 +94,7 @@
     <string name="notes_deleted_by_long_press_land_here_first">長押しで削除したノートはまずここに入ります</string>
     <string name="supports_json_csv_db">.json / .csv / .db の3形式に対応</string>
     <string name="lan_sync">LAN 同期</string>
-    <string name="phase_3_one_host_with_many_clients_incremental_c">第3段階：1ホスト多クライアント + 増分変更ログ</string>
+    <string name="phase_3_one_host_with_many_clients_incremental_c">第3段階：1ホスト多クライアント + 在庫の双方向差分</string>
     <string name="settings">設定</string>
     <string name="theme_mode_dynamic_color_scheduled_trash_cleanup">テーマモード / ダイナミックカラー / ゴミ箱の定期クリーンアップ</string>
     <string name="about">このアプリについて</string>
