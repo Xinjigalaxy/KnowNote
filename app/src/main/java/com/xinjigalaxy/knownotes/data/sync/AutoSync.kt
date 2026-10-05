@@ -17,19 +17,18 @@ import java.util.concurrent.TimeUnit
 /**
  * 定时自动同步（v1.10.0）：设备侧的后台定时。
  *
- * 为什么还留着设备侧这一份（服务器侧那份在 `server/knownote_hub.py` 里）：
- * 两边解决的其实是同一个问题的两半 ——
+ * 与服务器侧（`server/knownote_hub.py`）各解决同一问题的一半：
  *
- * - **手机主动推**（这里）：WorkManager 到点把 App 进程拉起来，读「主机地址 + 密钥」，
- *   跑一次 `SyncCoordinator`。不需要 App 在前台、也不需要谁先发现谁，但要受 Android
- *   的约束：最短周期 15 分钟，且系统在省电/息屏时可能再往后推迟。
- * - **服务器主动拉**（中心那边）：中心按 `interval_seconds` 去连手机，分钟级可控，
- *   但前提是手机上的「主机模式」正开着、App 进程还在。
+ * - **设备主动推**（这里）：WorkManager 到点拉起 App 进程，读「主机地址 + 密钥」，
+ *   跑一次 `SyncCoordinator`。不要求 App 在前台，也不需要谁先发现谁；但受 Android
+ *   约束：最短周期 15 分钟，系统在省电 / 息屏时可能继续推迟。
+ * - **服务器主动拉**（中心侧）：中心按 `interval_seconds` 连接设备，分钟级可控；
+ *   前提是设备的「主机模式」开着且 App 进程存活。
  *
- * 两个一起开最稳：手机醒来就推，中心到点就拉，谁先到算谁。
+ * 两者同时开启最稳：设备醒来即推，中心到点即拉，先到者生效。
  *
- * 注意：这里**刻意不引任何新的依赖**，用 App 里已经在用的 WorkManager
- * （回收站定时清理就是它）与现成的 `SyncCoordinator`。
+ * 依赖：只用 App 已有的 WorkManager（回收站定时清理同款）与现成的 `SyncCoordinator`，
+ * 不引入任何新依赖。
  */
 class AutoSyncWorker(
     context: Context,

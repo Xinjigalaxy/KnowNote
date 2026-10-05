@@ -32,7 +32,7 @@ enum class ThemeMode {
 /**
  * 应用级设置（外观 + 回收站清理）。
  *
- * 为什么要有这个类：**SharedPreferences 本身不是响应式的**。主题改完只写偏好，
+ * 需要这个类的原因：**SharedPreferences 本身不是响应式的**。主题改完只写偏好，
  * 界面不会重组；这里持一份 StateFlow，读写都经过它，Compose 直接 collect 就能立刻换肤。
  */
 class AppSettings(private val prefs: UiPrefs) {

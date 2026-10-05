@@ -16,7 +16,7 @@ private val IMAGE = Regex("!\\[([^\\]]*)\\]\\(${Regex.escape(NoteImages.SCHEME)}
  *
  * 图片要求**独占整行**，所以不管它写在行首、行中还是行尾，都抠出来单独成块：
  * 渲染时它总是一整行、铺满宽度，而文字段继续走 Markdown 渲染。
- * 这也是为什么用块切分而不是 AnnotatedString 的行内图片 —— 行内图片会跟着文字换行，
+ * 用块切分而非 AnnotatedString 行内图片的原因 —— 行内图片会跟着文字换行，
  * 做不到"永远自己一行"。
  */
 fun splitNoteBlocks(content: String): List<NoteBlock> {

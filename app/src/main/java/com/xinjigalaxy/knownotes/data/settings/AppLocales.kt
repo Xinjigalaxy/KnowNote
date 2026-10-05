@@ -12,8 +12,8 @@ import java.util.Locale
  * 应用语言的实际生效方式 —— 分两条路，因为 API 33 前后机制不一样：
  *
  * - **API 33+**：走系统 `LocaleManager`。它会持久化、和系统「设置 → 应用 → 语言」同步，
- *   并且改完**系统会自动重建 Activity**，不需要我们插手。清单里还声明了 `localeConfig`，
- *   所以系统那侧也能看到我们支持哪些语言。
+ *   改完**系统会自动重建 Activity**，应用无需干预；清单里声明的 `localeConfig`
+ *   也让系统侧知道应用支持哪些语言。
  * - **API < 33**：没有 per-app language API，只能用「包一层 Configuration 的 Context」，
  *   在 Activity 的 `attachBaseContext` 里应用，改完由界面自己 `recreate()`。
  *

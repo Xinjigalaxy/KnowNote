@@ -8,7 +8,7 @@ import com.xinjigalaxy.knownotes.R
 /**
  * 检索范围（v1.6.0）：标题 / 正文 / 标签，可任意组合，默认全选。
  *
- * 为什么不用 FTS 的**列限定**（`title:词`）：那是 SQLite 的"增强查询语法"，
+ * 不用 FTS **列限定**（`title:词`）的原因：那是 SQLite 的"增强查询语法"，
  * 需要编译 `SQLITE_ENABLE_FTS3_PARENTHESIS` —— Android 自带的 SQLite 没有编，
  * 和当初 `AND` 失效是同一个原因。真机上引擎是 FTS4，走列限定会直接搜不到东西。
  *
@@ -46,7 +46,7 @@ enum class SearchScope(val prefName: String) {
 
         /**
          * 候选集上限：范围一收窄，"命中的笔记数"可能远超默认上限，
-         * 先多取一些再由结果侧过滤收口，免得过滤后只剩个位数。
+         * 先放宽候选集，再由结果侧过滤收口，否则过滤后可能只剩个位数。
          */
         fun candidateLimit(scopes: Set<SearchScope>): Int =
             if (scopes.size == entries.size) FtsText.MAX_RESULTS else FtsText.MAX_RESULTS * 4

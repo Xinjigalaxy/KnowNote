@@ -4,37 +4,36 @@
 KnowNote 局域网同步中心（LAN Sync Hub）
 =====================================
 
-一个可以**长期跑在 Termux** 上的一主多从同步中心。它同时扮演两个角色：
+可长期跑在 Termux 上的同步中心，两个角色：
 
-1. **主机**：说出与 App 完全相同的有线协议（`GET /ping` + `POST /sync`，协议版本 2），
-   所以 App 里「填地址 + 共享密钥」就能把中心当主机用 —— 不需要改 App 的任何代码。
-2. **定时轮询者（本文件的核心）**：中心按固定间隔主动去连每一台**开着主机模式**的设备，
-   把「设备的新变更」拉回来、把「别的设备的新变更」推过去。
-   定时是从**服务器侧**发起的，手机不需要在后台跑任何定时任务、也不需要醒着。
+1. **主机**：线协议与 App 完全一致（`GET /ping` + `POST /sync`，协议版本 3），
+   App 填「中心地址 + 共享密钥」即可把中心当主机，无需改动 App 代码。
+2. **轮询者**：按固定间隔主动连接各台**开着主机模式**的设备，拉回其新变更、推去其他设备的新变更。
+   定时由服务端发起：设备不必在后台跑任务，也不必保持清醒。
 
-拓扑（中心 = 常驻服务器，手机 = 随时上下线）：
+拓扑（中心常驻，设备随时上下线）：
 
-    ┌────────────┐   POST /sync（手机主动）  ┌──────────────────────┐
-    │  手机 A     │ ───────────────────────▶ │  KnowNote Hub        │
+    ┌────────────┐   POST /sync（设备主动）   ┌──────────────────────┐
+    │  设备 A     │ ───────────────────────▶ │  KnowNote Hub        │
     │ （从机/主机）│ ◀─────────────────────── │  Termux 上常驻        │
     └────────────┘   定时轮询（中心主动）      │  SQLite + images/    │
-    ┌────────────┐   POST /sync（手机主动）   │  规范数据 + 变更日志   │
-    │  手机 B     │ ◀──────────────────────▶ │                      │
+    ┌────────────┐   POST /sync（设备主动）   │  规范数据 + 变更日志   │
+    │  设备 B     │ ◀──────────────────────▶ │                      │
     └────────────┘                           └──────────────────────┘
 
-协议、增量（change_log + 水位线）、冲突裁决（时间戳优先，打平按规范串收敛）、
-图片（base64、单批 6 张 / 4MB、多轮传完）全部与 App 的 `data/sync/` 逐条对齐 ——
-两边各说各的实现，最后以「真机上双向同步成功」为准（见 README 的验证记录）。
+与 App 逐条对齐（也以真机双向同步成功为最终判据，见 README 的验证记录）：
+差集 = 全量库存比对（协议 3）；水位线只作省一轮往返的快路径；
+冲突 = `updated_at` 优先，打平取规范串较大者；图片 = base64，单批 6 张 / 4MB，多轮传完。
 
-只用 Python 3 标准库：Termux 里 `pkg install python` 就够，不需要 pip、不需要编译。
+只用 Python 3 标准库：Termux 下 `pkg install python` 即可，无需 pip、无需编译。
 
 常用命令：
 
-    python knownote_hub.py --init-config hub.conf.json   # 生成配置（含随机密钥）
-    python knownote_hub.py --config hub.conf.json        # 常驻：主机 + 定时轮询
-    python knownote_hub.py --config hub.conf.json --once  # 只轮询一轮就退出（cron / termux-job-scheduler）
-    python knownote_hub.py --config hub.conf.json --no-poll   # 只当主机，不主动连设备
-    python knownote_hub.py --config hub.conf.json --check     # 只测每台设备通不通
+    python knownote_hub.py --init-config hub.conf.json      # 生成配置（含随机密钥）
+    python knownote_hub.py --config hub.conf.json           # 常驻：主机 + 定时轮询
+    python knownote_hub.py --config hub.conf.json --once    # 只轮询一轮（cron / termux-job-scheduler）
+    python knownote_hub.py --config hub.conf.json --no-poll # 只当主机，不主动连设备
+    python knownote_hub.py --config hub.conf.json --check   # 只测每台设备是否可达
 """
 
 from __future__ import annotations
@@ -202,7 +201,7 @@ class NoteEntry:
     """
     一条笔记的库存条目：身份 + 版本指纹，不含正文（与 App 的 NoteEntry 同形）。
 
-    为什么要有它：光靠水位线判断「你需要哪些」有洞 —— 一台已同步过的设备换了个新对端时，
+    原因：光靠水位线判断「你需要哪些」有洞 —— 一台已同步过的设备换了个新对端时，
     水位线是「和上一个对端同步到哪」，于是整库笔记只会推过去「上次同步之后改的那几条」。
     改成双方各报一份全量库存、由指纹比出真正的差集，就与水位线、时钟、上次和谁同步过全都无关。
     """
@@ -869,7 +868,7 @@ class SyncEngine:
                     if item.canonical() > local.canonical():
                         self.store.write_note(item, origin_device)
                         # 注：App 在「打平改判」这一支里只计冲突、不计落库条数，
-                        # 于是它的日志会说「推 0 条」而库里其实被改写了。中心这里两样都计 ——
+                        # 于是它的日志会写「推 0 条」，而库里内容已被改写。中心两者都计 ——
                         # 裁决规则（谁赢）与 App 完全一致，只是统计口径更诚实一点。
                         updated += 1
         return {
@@ -1527,7 +1526,7 @@ class Hub:
         return results
 
     def check_devices(self) -> None:
-        """--check：只测连通性，不改任何数据（顺带看密钥对不对）。"""
+        """--check：只测连通性，不改任何数据（同时验证密钥）。"""
         if not self.config.devices:
             self.note("配置里没有任何设备（devices 为空）")
             return

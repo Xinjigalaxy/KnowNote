@@ -20,7 +20,7 @@ enum class FtsEngine(val label: String, val description: String) {
 /**
  * FTS 索引通道（需求文档 3.1 / 3.2）。
  *
- * 为什么绕过 Room 注解：Room 只内置 @Fts3 / @Fts4，对 FTS5 虚拟表没有注解支持，
+ * 绕过 Room 注解的原因：Room 只内置 @Fts3 / @Fts4，对 FTS5 虚拟表没有注解支持，
  * 用 @Query 直接引用虚拟表也会被编译期 schema 校验拦下。所以这里手写 DDL 与
  * MATCH 查询：建表挂在 RoomDatabase.Callback 上，查询走原生 Cursor。
  *

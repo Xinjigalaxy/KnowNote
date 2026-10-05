@@ -110,7 +110,7 @@ class SettingsViewModel(
 
     fun setAutoPurgeTrash(enabled: Boolean) {
         settings.setAutoPurgeTrash(enabled)
-        // 开关与周期任务必须一起动：只改设置不排任务 = 用户以为清了其实没清
+        // 开关与周期任务必须同步变更：只改设置不排任务 = 状态显示已清、实际未清
         scheduleCleanup(enabled)
         local.update {
             it.copy(

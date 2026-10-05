@@ -99,7 +99,7 @@ class NoteRepository(
     /**
      * 没有全文引擎时的兜底：不分大小写、覆盖标题 / 正文 / 标签。
      *
-     * 为什么不在 SQL 里 LIKE：SQLite 的 `LIKE`（以及 `LOWER()`）只对 **ASCII** 折叠大小写，
+     * 不在 SQL 里用 LIKE 的原因：SQLite 的 `LIKE`（以及 `LOWER()`）只对 **ASCII** 折叠大小写，
      * `É` 与 `é` 不算同一个词。这里改成取出在线笔记在 Kotlin 侧比对（contains/equals 走
      * Unicode 规则），兜底路径与 FTS 路径的**大小写语义就完全一致**了。
      * 这个分支只在设备连 FTS3/4 都没有时才会走到，个人数据量下这点开销无所谓。
@@ -361,7 +361,7 @@ class NoteRepository(
 
     suspend fun lastSyncAt(): Long = syncDao.firstOrNull()?.lastSyncAt ?: 0L
 
-    /** 同步水位线：写回时保留 peer_url，免得顺手把用户填的主机地址抹掉。 */
+    /** 同步水位线：写回时保留 peer_url，否则会抹掉用户填的主机地址。 */
     suspend fun setLastSyncAt(value: Long) {
         val current = syncDao.firstOrNull()
         syncDao.put(
@@ -404,7 +404,7 @@ class NoteRepository(
      *
      * @param originDevice 非空表示本机是主机、正在中转从机的变更 —— 要把这条记进变更日志，
      *        否则第二个从机拉不到「第一个从机改的内容」。传 null（本机是从机）就不记，
-     *        免得把自己的库又当作「本地新变更」推回去。
+     *        否则本机改动会被当成「本地新变更」再推回去。
      */
     suspend fun writeFromRemote(payload: SyncNote, originDevice: String?): Long = db.withTransaction {
         val existing = noteDao.byGuid(payload.guid)
