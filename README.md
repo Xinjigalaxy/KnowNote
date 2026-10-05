@@ -3,7 +3,7 @@
 [English](README.en.md) · **中文**
 
 安卓记事本应用：Kotlin + Jetpack Compose + **Material 3**，Room(SQLite) + 全文检索（FTS5/FTS4/LIKE 三级降级），
-MVVM + Repository，局域网同步（一主多从）。
+MVVM + Repository，局域网同步（一主多从 + **定时自动同步**），另附一个**可以跑在 Termux 上的同步中心**（`server/`，纯 Python 标准库）。
 
 应用名 **KnowNote**（中文「碎片笔记」/ 繁體「碎片筆記」），界面支持
 **跟随系统 / 简体中文 / 繁體中文 / English / 日本語**，应用图标为「圆角卡片 + 三条笔记线」剪影，带单色层（Android 13+ 主题图标取色）。
@@ -27,6 +27,8 @@ MVVM + Repository，局域网同步（一主多从）。
 | 导出 | `.json` / `.csv`（带 BOM）/ `.db`（VACUUM INTO 一致性快照），SAF 保存免存储权限 |
 | 升级兼容 | `user_version` + 增量 `Migration`（`AppDatabase.MIGRATIONS`，1→2→3 全部只用 ALTER / CREATE，不重建表） |
 | 局域网同步 | ✅ 一主多从 + 手动触发：主机内嵌 HTTP 服务（默认 8765），从机填「地址 + 共享密钥」同步；**一次请求双向**（推自己的增量 + 拉主机的增量）；增量靠 `change_log` + 水位线；冲突按 `updated_at` 优先、打平按内容确定性收敛（详见第六节） |
+| 定时自动同步 | ✅ 两条互不依赖的路：**设备侧** WorkManager 周期任务（15 / 30 / 60 / 180 分钟可选；15 分钟是 Android 的下限，省电模式下还可能被推迟），应用不在前台也把变更推给主机；**服务器侧** `server/knownote_hub.py` 按 `interval_seconds` 主动去连各台设备（分钟级可控、不受手机省电策略影响）。同步页可开关、选间隔、看上次结果 |
+| 同步中心（Termux） | ✅ `server/knownote_hub.py`：纯 Python 3 标准库、零依赖，说的就是 App 那套线协议（协议版本 2），所以 App 里填「地址 + 密钥」就能把它当主机用；它自己也会定时轮询设备。SQLite 存笔记（含墓碑）+ `images/` 存图片 + `change_log` 增量 + 同一套冲突裁决；共享密钥认证（常量时间比较）+ 同 IP 连错限流；没设密钥拒绝启动 |
 | 同步日志 | ✅ `sync_log` 表记录每次同步（角色 / 对端 / 拉取 / 推送 / 冲突 / 失败原因），同步页展示、可清空 |
 | 跨设备标识 | ✅ `notes.guid`（唯一索引，v2→v3 迁移用 SQLite 的 `randomblob(16)` 回填老数据）；分组 / 标签跨设备按**名字**对齐，不需要 id 映射表 |
 | 删除的同步 | ✅ 「彻底删除」改为墓碑（`is_purged`）而不是删行 —— 删行的话对端下次同步会把这条笔记推回来 |
@@ -75,8 +77,13 @@ MVVM + Repository，局域网同步（一主多从）。
 export JAVA_HOME="D:\\app\\java17"
 ./gradlew :app:assembleDebug          # 产物 app/build/outputs/apk/debug/app-debug.apk
 ./gradlew :app:installDebug           # 装到已连接设备
-./gradlew :app:testDebugUnitTest      # 分词逻辑单测（纯 JVM，8 例）
-./gradlew :app:connectedDebugAndroidTest  # 仪器化测试（35 例）
+./gradlew :app:testDebugUnitTest      # 纯 JVM 单测（55 例）
+./gradlew :app:connectedDebugAndroidTest  # 仪器化测试（47 例，需要设备/模拟器）
+
+# 同步中心（Termux / PC 上的服务端，只用 Python 3 标准库，不需要任何依赖）
+python -m unittest discover -s server/tests -t .   # 中心测试 29 例（真 socket）
+python server/knownote_hub.py --init-config server/hub.conf.json   # 生成配置（含随机密钥）
+python server/knownote_hub.py --config server/hub.conf.json        # 跑起来（同时定时轮询设备）
 ```
 
 > **注意**：wrapper 的 `distributionUrl` 指向华为镜像
@@ -120,7 +127,11 @@ data/sync/SyncModels.kt     线格式（SyncNote / SyncRequest / SyncResponse）
 data/sync/SyncEngine.kt     收集本地增量 + 应用远端变更（时间戳优先 / 打平的确定性收敛）
 data/sync/SyncServer.kt     主机侧手写 HTTP 服务（ServerSocket，无第三方依赖）+ 局域网地址枚举
 data/sync/SyncClient.kt     从机侧 HttpURLConnection 客户端 + 地址解析
-data/sync/SyncCoordinator.kt 一次「从机同步会话」：取增量 → 发送 → 落库 → 水位线 → 日志
+data/sync/SyncCoordinator.kt 一次「从机同步会话」：取增量 → 发送 → 落库 → 水位线 → 日志（会话串行闸）
+data/sync/AutoSync.kt       定时自动同步：WorkManager 周期任务 + AutoSyncScheduler（排 / 撤）
+server/knownote_hub.py      同步中心：协议 v2 主机端 + 定时轮询设备 + SQLite / 图片 / 变更日志（Termux 可跑）
+server/start-hub.sh         Termux 启动脚本（wake-lock / 后台 / check / status）
+server/tests/test_hub.py    同步中心的测试（真实 socket：协议 / 冲突收敛 / 图片 / 调度，28 例）
 ui/…                        Compose 页面 + ViewModel（AppViewModelProvider 手工装配）
 ui/components/UiMessage.kt  ViewModel 侧可本地化消息（资源 id + 参数），界面负责渲染
 data/settings/AppSettings.kt 应用设置（主题 / 动态取色 / 回收站清理 / 语言），StateFlow 承载
@@ -206,9 +217,9 @@ W KnowNote: 全文检索引擎 FTS4 不可用: table notes_fts already exists ..
 | 检查项 | 结果 |
 | --- | --- |
 | `:app:assembleDebug` / `assembleRelease` | BUILD SUCCESSFUL |
-| 单元测试 `FtsTextTest` | 8/8 通过 |
-| 仪器化测试（Android 13 / SQLite 3.32.2，与真机同版本） | 35/35 通过（`tests="35" failures="0" errors="0"`） |
-| 仪器化测试（Android 15 / SQLite 3.44.3） | 35/35 通过 |
+| 单元测试 | 55/55 通过（`FtsTextTest` 8 / `MarkdownMarkupTest` 10 / `MarkupEditTest` 22 / `NoteBlocksTest` 7 / `SearchScopeTest` 8） |
+| 仪器化测试（Android 13 / SQLite 3.32.2，与真机同版本） | 47/47 通过（`tests="47" failures="0" errors="0"`；v1.9.0 时是 40 例） |
+| 仪器化测试（Android 15 / SQLite 3.44.3） | 47/47 通过 |
 | 设置与统计测试 `SettingsAndStatsTest` | 4/4：概览统计**真的会随操作推送新值**（订阅 flow 记录每次发射，而不是每次重查一遍）、定时清理只清够老的那条且留墓碑、保留期清理整空、设置读写往返 |
 | 同步引擎测试 `SyncEngineTest` | 8/8：远端新建（分组按名字建 / 标签关联）、时间戳优先、**打平收敛**（两台设备互相同步后内容相同）、软删与墓碑传播、本地彻底删除留墓碑并可同步出去、增量取数、主机中转记日志而从机不记、本机无该条时忽略墓碑 |
 | 同步真回环测试 `SyncLoopbackTest` | 3/3：**真 ServerSocket + 真 HttpURLConnection、两个独立库**跑双向同步（拉 4 推 1 再同步幂等）、错密钥 401 且错误原因透出、无密钥拒绝启动 |
@@ -239,6 +250,26 @@ W KnowNote: 全文检索引擎 FTS4 不可用: table notes_fts already exists ..
 | **真机发现并修复的插值 bug** | 切日语后设置页显示 `$days 日`、`${state.trashCount} 件` —— 抽取脚本只把**中文原文**的插值转成了 `%1$s`，四语言**译文**里的 `${...}` 却原样写进了资源，而 Android 资源不做模板展开。修法（`tools/i18n-fix-args.py`）：按**表达式文本**对齐编号而非出现顺序，日语把参数提到句首仍然正确（`同期完了：%1$s 件取得、この端末で %2$s 件反映`）。修后真机复验：日语 `0 件 / 7 日 / 前回のクリーンアップ 33 分前、0 件を削除`，英文 `0 items / 7 days / Last cleanup 33 minutes ago, removed 0` |
 | 图标单色层 | 修前 monochrome 指向彩色前景，主题图标模式下是一块实心方块；改为单色剪影后跟随系统取色 |
 
+### v1.10.0 验证（定时自动同步 + Termux 同步中心）
+
+设备侧（App）与服务器侧（`server/knownote_hub.py`）分别验证，最后合到一条链上跑通。
+
+| 检查项 | 结果 |
+| --- | --- |
+| 纯 JVM 单测 | 55/55 通过（本版改动集中在 Android 侧，未新增 JVM 单测） |
+| 仪器化测试（Android 13 / SQLite 3.32.2 模拟器） | **47/47** 通过（v1.9.0 是 40 例，本版新增 `AutoSyncTest` 7 例） |
+| 仪器化测试（Android 15 / SQLite 3.44.3 模拟器） | **47/47** 通过 |
+| `AutoSyncTest` | 7/7：关闭开关时什么都不做；**自动同步真的把中心上的笔记拉到本机**（真 ServerSocket + 真 HttpURLConnection）并写下「上次自动同步」；本机改动推上中心；地址没填 / 密钥没设时返回 success 而不是 failure（见 6.7 的坑）；中心没开机时返回 retry 并记下原因；密钥不对时把 401 的原因透出来；`AutoSyncScheduler` 真的排上 / 撤掉唯一周期任务 |
+| 同步中心测试 `server/tests/test_hub.py` | **29/29** 通过：协议层（真 HTTP 服务 + 真客户端：401 / 404 / 429 节流 / 坏 JSON / 协议版本）、引擎层（增量、冲突收敛、墓碑、图片只传一次、多轮）、调度层（`poll_device` 真连设备：双向、幂等、失败原因、水位线取 min）、设备状态落库 |
+| 跨实现①：**中心主动拉 App**（PC 上跑中心 / Android 13 模拟器跑 App） | 模拟器开启主机模式后，中心 `--check` 探测到 `✓ 通（对端自称 Android 模拟器，协议 2）`；`--once` 一轮把 App 侧的 **8 条笔记拉回中心**、把中心的 **2 条推给 App**（`拉 8 / 推 2 落库，冲突 0`）。回读 App 库：8 → **10 条**，其中「中心上的笔记 A/B」两条分组 / 标签都按名字对齐 |
+| 跨实现②：**App 主动同步中心**（点开「定时自动同步」开关） | 在 PC 侧中心新建第 3 条笔记后，点开开关 → 中心日志 `[host] … 接入：给它 11 条 / 它推来 0 条落库`，App 库 10 → **11 条**且新笔记在位；界面上「上次自动同步 刚刚 · 成功」。**幂等性顺带验到**：App 把 10 条推过去、中心落库 0 条（内容完全相同） |
+| 同步中心测试**在真 Termux 上跑**（Android 11 手机 / Termux 自带 Python 3.14.6 / arm64） | **29/29 通过** —— 零依赖、零编译，`pkg install python` 之后直接 `python3 -m unittest discover -s tests -t .`，不用 root、不用装任何第三方包 |
+| 跨实现③：**Termux 上的中心 ⇄ PC 上的中心** | 两台中心互认协议 2；Termux 侧一轮从 PC 拉回 **12 条**，紧接着第二轮 `拉 0 推 0`（幂等）；`--status` 显示「已同步过（2026-10-05 14:49，拉 0 / 推 0）」 |
+| 跨实现④：**Termux 上的中心 ⇄ 模拟器里的真 App** | 手机 Termux 里的中心 `--check` 认到 App（`Android 模拟器，协议 2`）；第一轮从 App 拉 10 条，在 Termux 里新建一条后第二轮**把它推给 App**（App 12 → 13 条，App 侧同步日志出现「接客（主机）Termux Hub (Android 11 手机) 拉取 0 条 · 推送 1 条」）。整条链路 = 真手机的 Termux Python ⇄ 真 Android App，靠的就是同一套协议 |
+| 设备状态落库（`--status` 是另一个进程） | `--status` 输出 `曾接入 Android 模拟器（127.0.0.1）：已同步过（2026-10-05 14:41，拉 11 / 推 0）` —— 修复前这里永远是「还没成功同步过」，因为状态只在内存里 |
+| 界面 | 「更多 → 局域网同步」新增**定时自动同步**卡片：开关 + 「已开启 · 每 30 分钟」+ 「上次自动同步 刚刚 · 成功」+ 间隔四档（15 / 30 / 60 / 180 分钟）+ 一行说明；失败时才显示诊断详情（成功时不留那串英文统计，免得占地方）；四语言文案齐全 |
+| APK 元信息 | `versionCode 14` / `versionName 1.10.0`（`dumpsys package` 读回确认）；minSdk 26 / targetSdk 36 |
+
 ## 五之二、版本记录
 
 | 版本 | 说明 |
@@ -257,13 +288,20 @@ W KnowNote: 全文检索引擎 FTS4 不可用: table notes_fts already exists ..
 | v1.7.0 | **阅读页可调 + 行内格式**：阅读页底部滑块单独调字号（倍率制，与全局字号解耦）+ MD / 文本模式切换；编辑器选中文字可加粗体 / 斜体 / 三档字号 / 六色，标记以 `<color>` / `<size>` 存进纯文本。顺带修一个真机才暴露的 bug：渲染器原先不递归解析行内内容，「粗体在外、颜色在内」会把标记当普通文字吐出来。单测 16 → **38** |
 | v1.8.0 | **正文插入图片**：相册选择 → 拷进私有目录（缩小重编码）→ 正文存 `![说明](img:文件名)`；渲染分块进行，图片独占整行（行内插入的同样单独成行）；摘要显示 `[说明]`。图片随**局域网同步**一起传输（同一张只传一次，超量自动分批多轮传完）；导出仍只带引用、不带图片文件 |
 | v1.9.0 | **图片参与局域网同步**：协议升到 2；一次同步里图片与笔记一起走（base64 承载，单批最多 6 张 / 4MB），超量自动多轮传完；每台设备记住「对端已有哪些图」，同一张只传一次；同步日志里带上图片收发张数 |
+| v1.10.0 | **定时自动同步 + Termux 同步中心**：同步页新增「定时自动同步」卡片（开关 / 间隔四档 / 上次结果），设备侧用 WorkManager 周期任务在后台把变更推给主机；新增 `server/knownote_hub.py` —— 纯 Python 3 标准库的同步中心，说的就是 App 那套协议（协议 2），既能当主机被 App 同步，也能按 `interval_seconds` **主动去连各台设备**（定时调度放在服务器侧，手机不用常驻后台），可长期跑在 Termux 上；一份 `start-hub.sh` 管启动 / 后台 / wake-lock / 状态 / 日志；同步会话加串行闸（手动与定时不会互相打水位线）；设备状态落库，`--status` 换进程也看得见 |
 
-## 六、局域网同步（v1.3.0）
+## 六、局域网同步（v1.3.0 起，v1.10.0 加定时）
 
-### 6.1 模式：一主多从 + 手动触发
+### 6.1 模式：一主多从，手动或定时
 
 一台设备开「主机模式」（内嵌 HTTP 服务，默认端口 8765），其他设备填「主机地址 + 共享密钥」点「开始同步」。
 同一台设备两个角色都能当（同步页里两块都在），个人场景下经常是手机和平板互相轮换。
+
+v1.10.0 起**触发方式**有两种，可以只开一种也可以都开（详见 6.7）：
+
+- **手动**：点「开始同步」。
+- **定时**：设备侧 WorkManager 周期任务；或者把「主机」换成 Termux 上的同步中心（`server/`），
+  由**服务器侧**按固定间隔主动来拉 —— 手机不用常驻后台，也不用管 Android 的省电策略。
 
 ### 6.2 协议：HTTP + JSON，两个接口
 
@@ -313,9 +351,76 @@ W KnowNote: 全文检索引擎 FTS4 不可用: table notes_fts already exists ..
 - **生命周期**：主机服务挂在应用作用域上，切页面不掉线；但**没做前台 Service**，进程被系统回收就停。
   同步页里直接写明了这一点，不假装能后台常驻。
 
+### 6.7 定时自动同步：两条路，各有各的边界
+
+「到点自动同步」这件事有两个不同的实现位置，本版**两个都做了**，因为它们各自有一半解决不了的问题：
+
+| | 设备侧（App 里的 `data/sync/AutoSync.kt`） | 服务器侧（`server/knownote_hub.py`） |
+| --- | --- | --- |
+| 谁发起 | 手机（WorkManager 到点拉起进程） | 中心（按 `interval_seconds` 主动连手机） |
+| 最短节拍 | **15 分钟**（Android 的硬下限），省电 / 息屏时还会再推迟 | 自定义（默认 60 秒，想多密都行） |
+| 需要什么 | 只要「主机地址 + 密钥」填对，不需要对端在跑 | 手机上得开着**主机模式**、App 进程还活着（6.6 那条限制一样适用） |
+| 开关在哪 | App 同步页「定时自动同步」卡片 | 配置文件 `interval_seconds` |
+
+两个一起开最稳：手机醒来就推一次，中心到点就拉一次，谁先到算谁 —— 反正同步是幂等的
+（验收时实测：App 把 10 条推给中心、中心落库 0 条，因为内容完全一样）。
+
+**实现上踩到的两个坑（都有回归测试钉住）**：
+
+1. **配置不全时不能返回 `failure`**。WorkManager 的规则是 Worker 返回 `failure` 就**把周期任务取消掉**，
+   于是用户第二天填好地址、任务却永远不会再跑，而且界面上什么异常都看不到。
+   所以「地址没填 / 密钥没设」按 `success` 处理（下一个周期再试），只有真的连不上才 `retry`（指数退避）。
+2. **手动同步和定时同步会撞水位线**。两者读的是同一份 `sync_meta.last_sync_at`，并行跑会各自读到同一个旧水位线、
+   把同一批变更推两遍（幂等所以数据不会坏，但日志重复、水位线互相覆盖）。
+   所以 `SyncCoordinator` 上加了一把互斥锁，会话排成队。
+
+另外，打开开关时会**立刻按同一条路跑一次**（调的就是 Worker 调的那个函数），
+这样地址填错能当场看到，而不用等 15 分钟才发现。
+
+### 6.8 Termux 同步中心（`server/`）
+
+`server/knownote_hub.py` 是一个能长期跑着的「同步中心」：它同时干两件事 ——
+
+1. **当主机**：`GET /ping` + `POST /sync`，与 App 的线格式**完全一致**（协议版本 2），
+   所以手机上填「中心地址 + 密钥」就能把它当普通主机用，一行 App 代码都不用改；
+2. **当轮询者**：按 `interval_seconds` 依次去连配置里的每台设备（设备那边开着主机模式），
+   把「谁也记不清该同步了」这件事交给中心 —— 这就是「定时调度放在服务器侧」。
+
+只用 **Python 3 标准库**（`http.server` / `sqlite3` / `threading` / `base64`），零依赖、零编译。
+Termux 上 `pkg install python` 就能跑，不需要 root，也不需要常驻前台服务：
+
+```bash
+cd server
+python knownote_hub.py --init-config hub.conf.json   # 生成配置（密钥是随机生成的，可以直接用）
+vim hub.conf.json                                    # 填 devices：每台手机的局域网 IP + 端口 + 密钥
+bash start-hub.sh bg                                 # 后台跑（nohup + 写 hub.pid / hub.log）
+bash start-hub.sh status                             # 中心存了多少条、每台设备上次同步结果
+bash start-hub.sh check                              # 只探测各设备通不通（不动数据）
+bash start-hub.sh log                                # 跟着看日志
+bash start-hub.sh stop                               # 停
+```
+
+其他常用参数：`--once`（只跑一轮轮询就退出，方便放 cron / Termux:Boot）、`--status`、`--check`、
+`--port`、`--key`、`--print-key`。`hub.conf.json`、`knownote-hub.db`、`images/` 都在 `.gitignore` 里 ——
+里面有密钥和真实笔记，不进公开仓库（样例配置是 `hub.conf.example.json`）。
+
+几条边界，说清楚免得误会：
+
+- **中心不存「对端状态」**：谁缺哪些图片完全由对端 `advertise` 的集合算出来，
+  所以中心挂了重启、换机器、数据库被清空，都不会让设备之间「记错对方有什么」；
+- **安全**：和 App 主机同一套 —— 共享密钥（常量时间比较）+ 同一 IP 连续错密钥限流；
+  **没设密钥拒绝启动**（退出码 2），不给自己留一个谁都能读走全部笔记的口子；
+  传输仍是**明文 HTTP**（和 6.6 一样，局域网内可控、跨网段不要用）；
+- **它不是「云端」**：数据只落在运行它的那台机器上（默认就是 Termux 的 app 私有目录），
+  没有账号、没有上游服务；想异地用请自己套一层隧道 / VPN；
+- **单进程够用**：`http.server` 的 `ThreadingHTTPServer` + 一把 SQLite 写锁，
+  个人量级（几台设备、几千条笔记）绰绰有余，但如果真要给几十台设备当中转，得换正经 WSGI + 连接池。
+
 ## 七、下一步建议
 
-1. **同步加固**：主机改用前台 Service（带常驻通知）以便长期待命；上 TLS 或预共享密钥加密解决局域网窃听；
+1. **同步加固**：主机改用前台 Service（带常驻通知）以便长期待命 —— v1.10.0 有了服务器侧定时拉取之后，
+   这条的紧迫性下降了一些（手机不必常驻，中心到点来拉即可），但「让手机一直当主机」还是得做；
+   上 TLS 或预共享密钥加密解决局域网窃听（现在 App 主机与同步中心都还是明文 HTTP）；
    跨网段 / 异地场景可考虑把「主机」做成可自选的静态地址而非手动输入
 2. **设备发现**：接 Android NSD / mDNS 自动发现主机，省掉手填 IP（本版刻意先做「地址 + 密钥」这条更可靠的路）
 3. **冲突体验**：现在是自动裁决，可以在同步日志里列出被裁决的条目，并提供「查看对端版本」入口

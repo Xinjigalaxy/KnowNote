@@ -4,6 +4,8 @@ import com.xinjigalaxy.knownotes.data.media.ImageStore
 import com.xinjigalaxy.knownotes.data.model.SyncLogEntry
 import com.xinjigalaxy.knownotes.data.prefs.UiPrefs
 import com.xinjigalaxy.knownotes.data.repo.NoteRepository
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
 /**
  * 一次完整的「从机同步」会话：取本地增量 → 发给主机 → 落库远端增量 → 记水位线与日志。
@@ -43,9 +45,22 @@ class SyncCoordinator(
     )
 
     /**
+     * 同步会话的串行闸（v1.10.0 起）。
+     *
+     * 手动点「开始同步」和后台的定时自动同步可能同时发生，而水位线只有**一份**
+     * （`sync_meta.last_sync_at`）。两个会话并行会各自读到同一个旧水位线，
+     * 把同一批变更推两遍（幂等，数据不会坏，但日志重复、水位线互相覆盖）。
+     * 用一把互斥锁把会话排成队：谁先到谁先跑，后到的等前一个结束，读到的是新水位线。
+     */
+    private val gate = Mutex()
+
+    /**
      * @return 会话结果；失败时把原因写进同步日志再返回 failure
      */
-    suspend fun syncWith(host: String, port: Int, key: String): Result<Session> {
+    suspend fun syncWith(host: String, port: Int, key: String): Result<Session> =
+        gate.withLock { syncSession(host, port, key) }
+
+    private suspend fun syncSession(host: String, port: Int, key: String): Result<Session> {
         val peerKey = "$host:$port"
         var watermark = repo.lastSyncAt()
         // 笔记只在第一轮传：后面几轮纯粹是为了把图片传完

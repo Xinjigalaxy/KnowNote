@@ -269,4 +269,16 @@
     <string name="image">画像</string>
     <string name="image_missing">画像が見つかりません：%1$s</string>
     <string name="image_insert_failed">画像を読み込めませんでした</string>
+    <string name="scheduled_auto_sync">定期の自動同期</string>
+    <string name="not_enabled">オフ</string>
+    <string name="auto_sync_is_on_every_minutes_min">オン · %1$d 分ごと</string>
+    <string name="last_auto_sync_formattime_state_autosynclastat">前回の自動同期 %1$s</string>
+    <string name="auto_sync_has_not_run_yet">自動同期はまだ実行されていません</string>
+    <string name="auto_sync_ok">成功</string>
+    <string name="auto_sync_failed">失敗</string>
+    <string name="interval">間隔</string>
+    <string name="every_minutes_min">%1$d 分</string>
+    <string name="workmanager_syncs_with_the_host_address_below">アプリが前面になくても、WorkManager が上のホストアドレスへ定期的に同期します。Android の最短周期は 15 分で、省電力モードではさらに遅れることがあります。Termux の同期ハブを使えば、サーバー側からもっと短い間隔で取りに来られます。</string>
+    <string name="scheduled_auto_sync_is_on">定期の自動同期をオンにしました</string>
+    <string name="scheduled_auto_sync_is_off">定期の自動同期をオフにしました</string>
 </resources>

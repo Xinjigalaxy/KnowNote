@@ -13,6 +13,7 @@ import com.xinjigalaxy.knownotes.data.prefs.UiPrefs
 import com.xinjigalaxy.knownotes.data.repo.NoteRepository
 import com.xinjigalaxy.knownotes.data.settings.AppSettings
 import com.xinjigalaxy.knownotes.data.settings.TrashCleanupScheduler
+import com.xinjigalaxy.knownotes.data.sync.AutoSyncScheduler
 import com.xinjigalaxy.knownotes.data.sync.SyncClient
 import com.xinjigalaxy.knownotes.data.sync.SyncCoordinator
 import com.xinjigalaxy.knownotes.data.sync.SyncEngine
@@ -72,6 +73,13 @@ class AppContainer(context: Context) {
             }
             // 自愈：设置里开着定时清理、但周期任务被系统清掉过，就在这里补排一次
             TrashCleanupScheduler.apply(appContext, uiPrefs.autoPurgeTrash())
+            // 同理：定时自动同步开着就补排周期任务（不是 force —— 已经排好的节拍别打断）
+            AutoSyncScheduler.apply(
+                appContext,
+                enabled = uiPrefs.autoSyncEnabled(),
+                minutes = uiPrefs.autoSyncIntervalMinutes(),
+                force = false,
+            )
         }
     }
 

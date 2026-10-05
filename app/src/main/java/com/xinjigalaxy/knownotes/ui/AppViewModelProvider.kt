@@ -7,6 +7,7 @@ import androidx.lifecycle.viewmodel.viewModelFactory
 import com.xinjigalaxy.knownotes.KnowNoteApp
 import com.xinjigalaxy.knownotes.data.settings.AppLocales
 import com.xinjigalaxy.knownotes.data.settings.TrashCleanupScheduler
+import com.xinjigalaxy.knownotes.data.sync.AutoSyncScheduler
 import com.xinjigalaxy.knownotes.ui.manage.GroupNotesViewModel
 import com.xinjigalaxy.knownotes.ui.manage.GroupViewModel
 import com.xinjigalaxy.knownotes.ui.manage.TagNotesViewModel
@@ -49,6 +50,9 @@ object AppViewModelProvider {
                 prefs = app().container.uiPrefs,
                 appScope = app().container.appScope(),
                 deviceName = app().container.deviceName,
+                scheduleAutoSync = { enabled, minutes, force ->
+                    AutoSyncScheduler.apply(app(), enabled, minutes, force)
+                },
             )
         }
     }

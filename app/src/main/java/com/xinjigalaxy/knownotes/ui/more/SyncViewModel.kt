@@ -6,6 +6,7 @@ import com.xinjigalaxy.knownotes.R
 import com.xinjigalaxy.knownotes.data.model.SyncLogEntry
 import com.xinjigalaxy.knownotes.data.prefs.UiPrefs
 import com.xinjigalaxy.knownotes.data.repo.NoteRepository
+import com.xinjigalaxy.knownotes.data.sync.AutoSync
 import com.xinjigalaxy.knownotes.data.sync.LanInfo
 import com.xinjigalaxy.knownotes.data.sync.SYNC_DEFAULT_PORT
 import com.xinjigalaxy.knownotes.data.sync.SyncClient
@@ -40,6 +41,8 @@ class SyncViewModel(
     private val prefs: UiPrefs,
     private val appScope: CoroutineScope,
     private val deviceName: String,
+    /** 排 / 撤定时任务。放在外面注入是因为 ViewModel 不该伸手去拿 Context（与回收站清理同款）。 */
+    private val scheduleAutoSync: (enabled: Boolean, minutes: Int, force: Boolean) -> Unit = { _, _, _ -> },
 ) : ViewModel() {
 
     data class UiState(
@@ -58,6 +61,12 @@ class SyncViewModel(
         val busy: Boolean = false,
         val message: UiMessage? = null,
         val log: List<SyncLogEntry> = emptyList(),
+        // ---- 定时自动同步（v1.10.0） ----
+        val autoSyncEnabled: Boolean = false,
+        val autoSyncIntervalMinutes: Int = 30,
+        val autoSyncLastAt: Long = 0L,
+        val autoSyncLastOk: Boolean = false,
+        val autoSyncLastMessage: String = "",
     )
 
     private val local = MutableStateFlow(UiState())
@@ -73,6 +82,11 @@ class SyncViewModel(
             servedRequests = status.servedRequests,
             hostError = status.lastError,
             log = log,
+            // 定时同步是后台跑的，页面上没有它的回调 —— 每次有同步日志发射（= 刚同步过）
+            // 就从偏好里重读一次结果，页面上的「上次自动同步」不会停在旧值。
+            autoSyncLastAt = prefs.autoSyncLastAt(),
+            autoSyncLastOk = prefs.autoSyncLastOk(),
+            autoSyncLastMessage = prefs.autoSyncLastMessage(),
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000L), UiState())
 
@@ -86,6 +100,8 @@ class SyncViewModel(
                 key = ensureKey(),
                 peer = prefs.peerAddress(),
                 hostAutoStart = prefs.hostAutoStart(),
+                autoSyncEnabled = prefs.autoSyncEnabled(),
+                autoSyncIntervalMinutes = prefs.autoSyncIntervalMinutes(),
             )
         }
         viewModelScope.launch {
@@ -265,6 +281,51 @@ class SyncViewModel(
 
     fun clearLog() {
         viewModelScope.launch { repo.clearSyncLog() }
+    }
+
+    // ---------- 定时自动同步（v1.10.0） ----------
+
+    /**
+     * 开关定时自动同步。
+     *
+     * 打开时顺手立刻同步一次：不然用户要盯着一个「已开启」的开关等 15~30 分钟才知道到底通不通，
+     * 而地址 / 密钥填错的反馈本来就该马上给。
+     */
+    fun setAutoSyncEnabled(enabled: Boolean) {
+        prefs.saveAutoSyncEnabled(enabled)
+        scheduleAutoSync(enabled, local.value.autoSyncIntervalMinutes, true)
+        local.update {
+            it.copy(
+                autoSyncEnabled = enabled,
+                message = if (enabled) {
+                    UiMessage(R.string.scheduled_auto_sync_is_on)
+                } else {
+                    UiMessage(R.string.scheduled_auto_sync_is_off)
+                },
+            )
+        }
+        if (!enabled) return
+        // 立刻跑一次，而且走的是**定时同步那条路**（AutoSync.run —— 和后台 Worker 同一个函数）：
+        // 这样地址 / 密钥填错会马上有反馈，跑出来的结果也直接落到卡片上的「上次自动同步」，
+        // 而不是像手动同步那样只在日志里留一笔。
+        viewModelScope.launch {
+            AutoSync.run(prefs, coordinator)
+            local.update {
+                it.copy(
+                    autoSyncLastAt = prefs.autoSyncLastAt(),
+                    autoSyncLastOk = prefs.autoSyncLastOk(),
+                    autoSyncLastMessage = prefs.autoSyncLastMessage(),
+                )
+            }
+        }
+    }
+
+    /** 改间隔：取消重排，新的节拍立刻生效。 */
+    fun setAutoSyncInterval(minutes: Int) {
+        val value = minutes.coerceAtLeast(AutoSync.MIN_INTERVAL_MINUTES)
+        prefs.saveAutoSyncIntervalMinutes(value)
+        scheduleAutoSync(local.value.autoSyncEnabled, value, true)
+        local.update { it.copy(autoSyncIntervalMinutes = value) }
     }
 
     // ---------- 共享密钥 ----------

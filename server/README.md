@@ -1,0 +1,197 @@
+# KnowNote 同步中心（LAN Sync Hub）
+
+一个可以**长期跑在 Termux 上**的局域网同步中心：把手机上的笔记集中到一台常开设备
+（旧手机 / 树莓派 / 家里的 PC）上，并且**由服务器侧按固定间隔自动同步**各台设备 ——
+手机不需要在后台跑定时任务，也不需要一直醒着。
+
+- 纯 Python 3 标准库，**零依赖、零编译**（Termux 里 `pkg install python` 就够，不用 pip）
+- 说的就是 App 那套线协议（`GET /ping` + `POST /sync`，协议版本 2），
+  App 里「填地址 + 共享密钥」就能把中心当主机用，**不用装两个 App、不用改 App**
+- 两个角色都干：
+  - **主机**：接待手机连过来（手机上点「开始同步」，或手机上开着定时自动同步）
+  - **定时轮询者**：每 `interval_seconds` 秒主动连一次各台设备，把新变更拉回来、把别人的新变更推过去
+- SQLite 存笔记（含墓碑）、`images/` 存图片、`change_log` + 水位线做增量，
+  冲突裁决与 App 完全同规则（时间戳优先，打平按规范串收敛）
+- 共享密钥认证（常量时间比较）＋ 同一 IP 连续猜错就限流；**没设密钥拒绝启动**
+- 手机浏览器直接看状态：`http://<中心地址>:8765/status`（带密钥时）
+
+## 一、拓扑
+
+```
+   ┌────────────┐   ① 手机 → 中心（POST /sync，手动或定时）   ┌───────────────────────┐
+   │  手机 A     │ ─────────────────────────────────────────▶ │  KnowNote 同步中心      │
+   │（KnowNote） │ ◀───────────────────────────────────────── │  Termux（常开的那台）   │
+   └────────────┘   ② 中心 → 手机（每 N 秒轮询一次，需手机开主机模式）└───────────────────────┘
+   ┌────────────┐                                            │  SQLite + images/      │
+   │  手机 B     │ ◀────────────────────────────────────────▶ │  规范数据 + 变更日志     │
+   └────────────┘                                            └───────────────────────┘
+```
+
+两条路只要走通一条，笔记就会自动汇总：A 的改动经中心落到 B，反之亦然。
+
+## 二、Termux 部署（10 分钟）
+
+```bash
+# 1) 装 Python（Termux 里只需这一步）
+pkg install -y python
+
+# 2) 把 server/ 目录传进手机（PC 上有 adb 的话）
+#    adb push <仓库>/server /sdcard/Download/knownote-hub
+#    手机 Termux 里：
+mkdir -p ~/knownote-hub && cd ~/knownote-hub
+cp -r /sdcard/Download/knownote-hub/* .        # 或者用 unzip、syncthing、U 盘都行
+
+# 3) 生成配置（会打印一个随机共享密钥）
+python knownote_hub.py --init-config hub.conf.json
+
+# 4) 改配置：把 devices 里的手机地址换成真地址
+#    手机地址在 App『更多 → 局域网同步 → 本机地址』能看到
+nano hub.conf.json
+
+# 5) 跑起来
+bash start-hub.sh           # 前台（Ctrl+C 停，日志就在屏幕上）
+bash start-hub.sh bg        # 后台（日志写 hub.log）
+bash start-hub.sh check     # 只测每台设备通不通
+bash start-hub.sh status    # 看本地库里有多少条、最近同步记录
+bash logs.sh                # 跟踪日志
+bash stop-hub.sh            # 停掉后台的
+```
+
+想改轮询间隔：`bash start-hub.sh bg 120`（每 2 分钟一次），或直接改配置里的 `interval_seconds`。
+
+### 手机侧设置（两种，选一种或都开）
+
+| 方式 | 手机上要做什么 | 什么时候同步 | 可靠性 |
+| --- | --- | --- | --- |
+| **中心轮询**（推荐，纯服务器侧） | 「局域网同步 → 主机模式」打开（建议也开自动恢复） | 每 `interval_seconds` 秒一次 | App 进程被系统回收时中心会连不上，日志里会写 `unreachable` |
+| **设备侧定时** | 「局域网同步 → 定时自动同步」打开，地址填中心地址、密钥填中心的密钥 | Android 允许的最短 15 分钟一次（系统可能推迟） | 不需要 App 在前台，靠 WorkManager 拉起 |
+
+> 两种一起开最稳：手机主动推给中心（不开主机模式也行），中心也主动去拉（手机在用时能更快同步）。
+
+### 开机自启（可选）
+
+Termux 的 `bash` 放两个脚本就能开机跑：
+
+```bash
+mkdir -p ~/.termux/boot
+cat > ~/.termux/boot/knownote-hub.sh <<'EOF'
+#!/data/data/com.termux/files/usr/bin/sh
+termux-wake-lock
+cd ~/knownote-hub && bash start-hub.sh bg
+EOF
+chmod +x ~/.termux/boot/knownote-hub.sh
+```
+
+前提是装了 Termux:Boot 并至少打开过一次。用 `termux-services`（`sv`）也行，本项目没强依赖。
+
+### 不想常驻：单轮模式
+
+适合塞进 cron / `termux-job-scheduler`：跑一轮就退出，退出码 0 = 全部设备成功、1 = 有设备失败。
+
+```bash
+python knownote_hub.py --config hub.conf.json --once
+```
+
+## 三、配置项
+
+| 键 | 说明 |
+| --- | --- |
+| `device_name` | 中心在设备列表 / 同步日志里显示的名字 |
+| `device_id` | 中心的设备标识（会出现在对端日志里，改不改都行，别和手机重名） |
+| `bind` / `port` | 监听地址与端口，默认 `0.0.0.0:8765`（和 App 默认端口一致） |
+| `key` | **必填**。手机连中心时用的共享密钥；留空拒绝启动 |
+| `db` / `images_dir` | 数据库与图片目录（相对路径按配置文件所在目录算） |
+| `log_file` | 日志文件；不填只打屏幕 |
+| `interval_seconds` | 定时轮询间隔，最小 30 |
+| `poll_on_start` | 启动后先跑一轮再进定时循环 |
+| `devices[].name` | 设备名（显示用） |
+| `devices[].host` / `port` / `address` | 设备地址，三种写法都行：`192.168.1.7`、`192.168.1.7:8765`、`http://192.168.1.7:8765` |
+| `devices[].key` | 该设备自己的共享密钥；留空 = 与顶层 `key` 相同 |
+| `devices[].enabled` | 关掉就跳过这台设备 |
+
+命令行可以临时覆盖：`--port 8765`、`--interval 300`、`--no-poll`（只当主机）、
+`--no-serve`（只轮询不开主机接口）、`--print-key`、`--set-key`。
+
+## 四、为什么「定时」放在服务器侧
+
+Android 从 6.0 起掐后台 Service、9.0 起砍隐式广播，App 想在后台定时干活只能靠
+WorkManager（最短 15 分钟，而且系统可以再推迟）。中心放在常开设备上，定时这件事就
+变成了一个普通进程的 `while True: sleep(interval)`，**分钟级**可控、也不受手机省电策略影响。
+
+因此本版本是两个方向都有，谁也不依赖谁：
+
+- 服务器侧：`interval_seconds` 到了就去轮询（本文件这一侧的实现）；
+- 设备侧：App 里可以开「定时自动同步」，由 WorkManager 把变更推给中心。
+
+## 五、安全边界（不承诺做不到的事）
+
+- **认证**：`X-KnowNote-Key` 共享密钥，`hmac.compare_digest` 常量时间比较。
+  同一 IP 在 10 分钟内错 8 次就临时返回 429（`Retry-After` 600 秒），挡在线爆破。
+- **保密**：**没有**。局域网内明文 HTTP，同网段抓包能看到笔记内容。
+  密钥解决的是「谁能同步」，不是「中途看不看得见」—— 要保密得等 TLS 或预共享密钥加密。
+- **暴露面**：默认绑定 `0.0.0.0`（局域网内可连）。**没设密钥拒绝启动**；密钥是 8 位随机串。
+  不要把端口映射到公网。要更严的话把 `bind` 改成 `127.0.0.1`，只让手机通过 Termux 本机访问
+  （或者在手机上用 SSH 隧道 / Tailscale 之类的内网）。
+- **图片文件名**：只接受 `[A-Za-z0-9]` 开头的字母数字与 `. _ -`（最长 120 字符），
+  别的一律跳过 —— 对端发来 `../x.jpg` 这种名字不可能落到目录之外。
+- **请求体上限** 32MB（协议本身单批上限是 6 张图 / 4MB）。
+
+## 六、与 App 协议的对应关系
+
+| 位置 | App（Kotlin） | 中心（Python） |
+| --- | --- | --- |
+| 线格式 | `data/sync/SyncModels.kt` | `SyncNote` / `SyncImage` / `SyncRequest` / `SyncResponse` |
+| 增量 | `change_log` + `last_sync_at` → `at > since` | 同 |
+| 冲突 | `updated_at` 优先；打平取规范串较大者 | 同（`canonical()` 字段顺序一致） |
+| 主机顺序 | **先取要发的增量，再应用对端推来的** | 同（反了会把对方刚推的变更回声回去） |
+| 中转 | 主机收到从机变更时记一条 `change_log` | 同（中心是中转者，否则第二台设备拉不到） |
+| 水位线 | `min(对端 server_time, 本机时间)` | 同 |
+| 图片 | base64、单批 6 张 / 4MB、同名不覆盖、`.part` + rename | 同 |
+
+两处**刻意**不完全一样的地方（只影响计数与效率，不影响最终数据）：
+
+1. 打平改判时 App 只计「冲突」不计「落库条数」，中心两样都计 —— 否则日志里会写「推 0 条」而库里其实被改写了。
+2. App 的客户端一轮同步最多从主机拉 6 张图（剩下的要再点一次同步）；中心轮询时会续轮，
+   一次就把缺的图补齐（上限 4 轮）。
+
+## 七、排错
+
+先跑 `bash start-hub.sh check`，它只说通不通，不动数据：
+
+| 现象 | 原因 / 怎么办 |
+| --- | --- |
+| `unreachable: ... 拒绝连接` | 手机不在同一 Wi-Fi、IP 变了、App 没开主机模式，或 App 进程被系统回收了 |
+| `401 Shared key mismatch` | 中心的 `devices[].key` 与手机上那个密钥不一致（手机上可重新生成，然后抄到配置里） |
+| `426 Protocol version mismatch` | 两边 App 版本不一致（协议版本 2 = App v1.9.0 及以上） |
+| `429 Too many failed attempts` | 刚才密钥错太多次，等 10 分钟或重启中心 |
+| 笔记同步了但图片没传 | 单批上限 6 张 / 4MB，等下一轮；中心端一次最多 4 轮 |
+| 中心侧笔记数一直是 0 | 手机从来没连上过中心：要么手机上去点一次同步，要么中心 `check` 通了让轮询自己拉 |
+
+日志里三条最常看的行：
+
+```
+[host] 手机A@192.168.1.7 接入：给它 3 条 / 它推来 1 条落库（冲突 0）、图片 +0/-0
+[poll] 平板A (192.168.1.7:8765) 拉 2 条 / 推 1 条落库（冲突 0）、图片 +1/-0、1 轮
+[poll] 平板A (192.168.1.7:8765) 同步失败：unreachable: ... 拒绝连接
+```
+
+## 八、测试
+
+```bash
+# 在仓库根目录
+python -m unittest discover -s server/tests -t . -v     # 29 个用例
+# 或者
+python server/tests/test_hub.py
+# 在 Termux 里（说明零依赖：装完 python 就能这么跑）
+cd server && python3 -m unittest discover -s tests -t .
+```
+
+覆盖：协议（`/ping`、错密钥 401、协议 426、坏 JSON 400、404、限流 429、无密钥拒绝启动）、
+引擎（增量、时间戳优先、打平收敛、墓碑不外复活、未知 guid 的墓碑忽略）、
+图片（双向传输、只传一次、单批张数/字节上限、路径穿越被拒）、
+调度（一轮双向、两台设备经中心中转、幂等、图片多轮补齐、连不上/密钥错的日志、水位线、定时线程按节拍跑）、
+设备状态落库（`--status` 是另一个进程，状态不能只放内存）。
+
+**真机验证**：在 Android 11 手机（Termux 自带 Python 3.14.6 / arm64）上跑 **29/29 通过**；
+并做过两条跨实现链路 —— Termux 上的中心 ⇄ PC 上的中心（一轮拉 12 条，第二轮 0/0 幂等）、
+Termux 上的中心 ⇄ 模拟器里的真 App（先拉 10 条，再把它自己新建的那条推给 App）。

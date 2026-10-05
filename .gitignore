@@ -33,6 +33,20 @@ tools/*.png
 lg-shots/
 demo-shots/
 
+# ---- 同步中心的本地配置与数据 ----
+# hub.conf.json 里是共享密钥，knownote-hub.db / images/ 是真实笔记与图片：
+# 三个都不进公开仓库（样例配置是 hub.conf.example.json）。
+server/hub.conf.json
+server/hub.conf.*.json
+server/knownote-hub.db*
+server/images/
+server/hub.pid
+server/hub.log
+
+# Python 字节码缓存
+__pycache__/
+*.py[cod]
+
 # 注意：以下内容**必须**入库，不要加进 ignore
 #   gradle/wrapper/gradle-wrapper.jar   —— 没有它 clone 下来跑不了 ./gradlew
 #   gradle/wrapper/gradle-wrapper.properties

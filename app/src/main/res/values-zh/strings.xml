@@ -269,4 +269,16 @@
     <string name="image">图片</string>
     <string name="image_missing">图片已丢失：%1$s</string>
     <string name="image_insert_failed">这张图片读取失败</string>
+    <string name="scheduled_auto_sync">定时自动同步</string>
+    <string name="not_enabled">未开启</string>
+    <string name="auto_sync_is_on_every_minutes_min">已开启 · 每 %1$d 分钟</string>
+    <string name="last_auto_sync_formattime_state_autosynclastat">上次自动同步 %1$s</string>
+    <string name="auto_sync_has_not_run_yet">定时同步还没跑过</string>
+    <string name="auto_sync_ok">成功</string>
+    <string name="auto_sync_failed">失败</string>
+    <string name="interval">间隔</string>
+    <string name="every_minutes_min">%1$d 分钟</string>
+    <string name="workmanager_syncs_with_the_host_address_below">应用不在前台也生效：WorkManager 按上面的主机地址定时同步一次。Android 最短周期是 15 分钟，省电模式下还可能被推迟；换成 Termux 上的同步中心，可以由服务器侧按更短的间隔主动来拉。</string>
+    <string name="scheduled_auto_sync_is_on">已开启定时自动同步</string>
+    <string name="scheduled_auto_sync_is_off">已关闭定时自动同步</string>
 </resources>

@@ -272,4 +272,16 @@
     <string name="image">Image</string>
     <string name="image_missing">Image missing: %1$s</string>
     <string name="image_insert_failed">Could not read that image</string>
+    <string name="scheduled_auto_sync">Scheduled auto sync</string>
+    <string name="not_enabled">Not enabled</string>
+    <string name="auto_sync_is_on_every_minutes_min">On · every %1$d min</string>
+    <string name="last_auto_sync_formattime_state_autosynclastat">Last auto sync %1$s</string>
+    <string name="auto_sync_has_not_run_yet">Auto sync has not run yet</string>
+    <string name="auto_sync_ok">ok</string>
+    <string name="auto_sync_failed">failed</string>
+    <string name="interval">Interval</string>
+    <string name="every_minutes_min">%1$d min</string>
+    <string name="workmanager_syncs_with_the_host_address_below">WorkManager syncs with the host address above on a timer, even when the app is closed. Android enforces a 15-minute minimum and may delay it in Doze. A Termux sync hub can poll this device instead, on its own tighter schedule.</string>
+    <string name="scheduled_auto_sync_is_on">Scheduled auto sync is on</string>
+    <string name="scheduled_auto_sync_is_off">Scheduled auto sync is off</string>
 </resources>

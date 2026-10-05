@@ -2,6 +2,8 @@ package com.xinjigalaxy.knownotes.ui.more
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -20,6 +22,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -47,6 +50,7 @@ import com.xinjigalaxy.knownotes.R
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.xinjigalaxy.knownotes.data.model.SyncLogEntry
+import com.xinjigalaxy.knownotes.data.sync.AutoSync
 import com.xinjigalaxy.knownotes.ui.AppViewModelProvider
 import com.xinjigalaxy.knownotes.ui.components.formatTime
 import com.xinjigalaxy.knownotes.ui.components.rendered
@@ -58,7 +62,7 @@ import com.xinjigalaxy.knownotes.ui.components.rendered
  * 主机服务挂在应用作用域上，所以切页面不会掉线；但应用被系统杀掉就会停 ——
  * 这一版没上前台 Service，页面里也直接写明了，不假装能后台常驻。
  */
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun SyncScreen(
     onBack: () -> Unit,
@@ -208,6 +212,85 @@ fun SyncScreen(
                         } else {
                             stringResource(R.string.never_synced)
                         },
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.outline,
+                    )
+                }
+            }
+
+            item {
+                SectionCard(title = stringResource(R.string.scheduled_auto_sync)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Switch(
+                            checked = state.autoSyncEnabled,
+                            onCheckedChange = viewModel::setAutoSyncEnabled,
+                        )
+                        Spacer(Modifier.width(12.dp))
+                        Column {
+                            Text(
+                                text = if (state.autoSyncEnabled) {
+                                    stringResource(R.string.auto_sync_is_on_every_minutes_min, state.autoSyncIntervalMinutes)
+                                } else {
+                                    stringResource(R.string.not_enabled)
+                                },
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.Medium,
+                                color = if (state.autoSyncEnabled) {
+                                    MaterialTheme.colorScheme.primary
+                                } else {
+                                    MaterialTheme.colorScheme.onSurfaceVariant
+                                },
+                            )
+                            Text(
+                                text = if (state.autoSyncLastAt > 0L) {
+                                    stringResource(
+                                        R.string.last_auto_sync_formattime_state_autosynclastat,
+                                        formatTime(state.autoSyncLastAt),
+                                    ) + " · " + if (state.autoSyncLastOk) {
+                                        stringResource(R.string.auto_sync_ok)
+                                    } else {
+                                        stringResource(R.string.auto_sync_failed)
+                                    }
+                                } else {
+                                    stringResource(R.string.auto_sync_has_not_run_yet)
+                                },
+                                style = MaterialTheme.typography.labelSmall,
+                                color = if (state.autoSyncLastAt > 0L && !state.autoSyncLastOk) {
+                                    MaterialTheme.colorScheme.error
+                                } else {
+                                    MaterialTheme.colorScheme.outline
+                                },
+                            )
+                        }
+                    }
+                    // 成功时那一串 "pulled 11 (applied 1), pushed 10 …" 是诊断用的，
+                    // 摆在这里只会占地方（同步日志里本来就有）；失败时才把它露出来 ——
+                    // 那时候用户需要的正是「到底哪儿不对」。
+                    if (state.autoSyncLastAt > 0L && !state.autoSyncLastOk &&
+                        state.autoSyncLastMessage.isNotBlank()
+                    ) {
+                        Text(
+                            text = state.autoSyncLastMessage,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.error,
+                        )
+                    }
+                    Text(
+                        text = stringResource(R.string.interval),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.outline,
+                    )
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        AutoSync.INTERVAL_CHOICES.forEach { minutes ->
+                            FilterChip(
+                                selected = state.autoSyncIntervalMinutes == minutes,
+                                onClick = { viewModel.setAutoSyncInterval(minutes) },
+                                label = { Text(stringResource(R.string.every_minutes_min, minutes)) },
+                            )
+                        }
+                    }
+                    Text(
+                        text = stringResource(R.string.workmanager_syncs_with_the_host_address_below),
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.outline,
                     )
