@@ -14,6 +14,8 @@ import com.xinjigalaxy.knownotes.data.repo.NoteRepository
 import com.xinjigalaxy.knownotes.data.settings.AppSettings
 import com.xinjigalaxy.knownotes.data.settings.TrashCleanupScheduler
 import com.xinjigalaxy.knownotes.data.sync.AutoSyncScheduler
+import com.xinjigalaxy.knownotes.data.sync.LanGuard
+import com.xinjigalaxy.knownotes.data.sync.LanScopeCheck
 import com.xinjigalaxy.knownotes.data.sync.SyncClient
 import com.xinjigalaxy.knownotes.data.sync.SyncCoordinator
 import com.xinjigalaxy.knownotes.data.sync.SyncEngine
@@ -56,9 +58,11 @@ class AppContainer(context: Context) {
     val syncEngine = SyncEngine(repository)
     /** 图片的读写口子：同步层不碰 Context，这里注入应用私有目录的实现。 */
     val imageStore: ImageStore = FileImageStore(appContext)
+    /** 局域网边界（v1.10.1）：只在局域网里同步，从机/主机两侧共用。 */
+    val lanGuard: LanScopeCheck = LanGuard(appContext)
     val syncServer = SyncServer(repository, syncEngine, deviceId, deviceName, imageStore)
     val syncClient = SyncClient(deviceId, deviceName)
-    val syncCoordinator = SyncCoordinator(repository, syncEngine, syncClient, imageStore, uiPrefs)
+    val syncCoordinator = SyncCoordinator(repository, syncEngine, syncClient, imageStore, uiPrefs, lanGuard)
 
     fun appScope(): CoroutineScope = scope
 

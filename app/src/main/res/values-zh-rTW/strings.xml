@@ -281,4 +281,8 @@
     <string name="workmanager_syncs_with_the_host_address_below">App 不在前景也生效：WorkManager 依上面的主機位址定時同步一次。Android 最短週期是 15 分鐘，省電模式下還可能被延後；改用 Termux 上的同步中心，可以由伺服器端用更短的間隔主動來拉。</string>
     <string name="scheduled_auto_sync_is_on">已開啟定時自動同步</string>
     <string name="scheduled_auto_sync_is_off">已關閉定時自動同步</string>
+    <string name="sync_blocked_not_lan_network">同步沒有開始：目前不在區域網路（例如用的是行動數據）。連上 Wi-Fi 再試。</string>
+    <string name="sync_blocked_not_lan_peer">同步沒有開始：%1$s 不在區域網路網段，只允許區域網路位址。</string>
+    <string name="refused_lan_peers_n">· 已拒絕 %1$d 次區域網路外的連線</string>
+    <string name="peers_and_this_device_must_be_on_the_same_lan">兩台裝置要在同一個區域網路裡：行動數據時不會同步，主機位址填成公網位址也會被拒絕。</string>
 </resources>

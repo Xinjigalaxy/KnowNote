@@ -157,6 +157,15 @@ fun SyncScreen(
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.outline,
                             )
+                            // 局域网边界（v1.10.1）：有被拒的才显示 —— 平时不占地方，
+                            // 真有局域网外的连接来敲门时，这里能直接看到。
+                            if (state.refusedPeers > 0) {
+                                Text(
+                                    text = stringResource(R.string.refused_lan_peers_n, state.refusedPeers),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.error,
+                                )
+                            }
                         }
                     }
                     OutlinedTextField(
@@ -212,6 +221,13 @@ fun SyncScreen(
                         } else {
                             stringResource(R.string.never_synced)
                         },
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.outline,
+                    )
+                    // 局域网边界（v1.10.1）：把「什么时候会被拒绝」写在按钮旁边，
+                    // 比事后弹一句「同步失败」有用得多。
+                    Text(
+                        text = stringResource(R.string.peers_and_this_device_must_be_on_the_same_lan),
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.outline,
                     )

@@ -284,4 +284,8 @@
     <string name="workmanager_syncs_with_the_host_address_below">WorkManager syncs with the host address above on a timer, even when the app is closed. Android enforces a 15-minute minimum and may delay it in Doze. A Termux sync hub can poll this device instead, on its own tighter schedule.</string>
     <string name="scheduled_auto_sync_is_on">Scheduled auto sync is on</string>
     <string name="scheduled_auto_sync_is_off">Scheduled auto sync is off</string>
+    <string name="sync_blocked_not_lan_network">Sync did not start: this device is not on a local network right now (mobile data?). Connect to Wi-Fi and try again.</string>
+    <string name="sync_blocked_not_lan_peer">Sync did not start: %1$s is not on your local network. Only LAN addresses are allowed.</string>
+    <string name="refused_lan_peers_n">· refused %1$d connection(s) from outside the LAN</string>
+    <string name="peers_and_this_device_must_be_on_the_same_lan">Both devices have to be on the same local network: sync is skipped on mobile data, and a public host address is refused.</string>
 </resources>

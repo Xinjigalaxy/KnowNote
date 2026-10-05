@@ -42,10 +42,12 @@ from __future__ import annotations
 import argparse
 import base64
 import hmac
+import ipaddress
 import json
 import os
 import random
 import re
+import socket
 import sqlite3
 import sys
 import threading
@@ -840,6 +842,104 @@ def parse_address(text: str, default_port: int = SYNC_DEFAULT_PORT) -> Optional[
 # ---------------------------------------------------------------------------
 
 
+# ---------------------------------------------------------------------------
+# 局域网限制（v1.10.1）
+#
+# 「只在局域网里同步」要拦两种东西：
+#   ① 来源在局域网外的请求（公网直连、路由器端口映射）；
+#   ② 经隧道 / 反向代理进来的请求 —— 这时直连地址常是 127.0.0.1，
+#      真身在 CF-Connecting-IP / X-Real-IP / X-Forwarded-For 里，所以要看头。
+# 两条都满足才放行，缺一不可。
+# ---------------------------------------------------------------------------
+
+# 什么算「局域网」：RFC1918 + 环回 + 链路本地，以及 IPv6 的 ::1 / ULA / 链路本地。
+# 刻意**不**收 100.64.0.0/10（运营商大内网）：手机在移动数据上就是那个网段，
+# 那已经是「局域网外」—— 收进来这条规矩就形同虚设了。
+_LAN_NETWORKS = tuple(
+    ipaddress.ip_network(text)
+    for text in (
+        "10.0.0.0/8",
+        "172.16.0.0/12",
+        "192.168.0.0/16",
+        "127.0.0.0/8",
+        "169.254.0.0/16",
+        "::1/128",
+        "fc00::/7",
+        "fe80::/10",
+    )
+)
+
+# 代理 / 隧道会加的头，按可信度排。直连过来的对端这些头是空的。
+_ORIGIN_HEADERS = ("cf-connecting-ip", "x-real-ip", "x-forwarded-for")
+
+
+def parse_ip(value) -> Optional[object]:
+    """把 IP 字面量 / `IP:端口` / `[IPv6]:端口` / v4-mapped 解析成地址对象；解析不了返回 None。"""
+    if isinstance(value, (ipaddress.IPv4Address, ipaddress.IPv6Address)):
+        return value
+    text = str(value or "").strip()
+    if not text:
+        return None
+    if text.startswith("["):                        # [::1]:8765
+        text = text[1:].split("]", 1)[0]
+    elif text.count(":") == 1 and "." in text:      # 192.168.1.5:8765
+        text = text.split(":", 1)[0]
+    text = text.split("/", 1)[0]                    # 带掩码的写法
+    if text.lower().startswith("::ffff:"):          # v4-mapped
+        text = text[7:]
+    try:
+        return ipaddress.ip_address(text)
+    except ValueError:
+        return None
+
+
+def is_lan_address(value) -> bool:
+    """是不是局域网地址。非 IP（域名、空值、乱码）一律当「不是」—— 保守的方向才是安全的方向。"""
+    address = parse_ip(value)
+    if address is None:
+        return False
+    return any(
+        address.version == network.version and address in network
+        for network in _LAN_NETWORKS
+    )
+
+
+def claimed_origin(headers) -> str:
+    """代理头里那个「被代理的真实来源」；没有就返回空串。多跳只取第一个（最靠近客户端的那跳）。"""
+    if not headers:
+        return ""
+    # HTTP 头在协议上不分大小写：email.message.Message 自带大小写无关，普通 dict 没有，
+    # 所以统一摊成「小写键」的字典再看（头就那么几个，代价可以忽略）。
+    try:
+        items = dict(headers).items()
+    except Exception:
+        items = []
+    lower = {str(key).lower(): value for key, value in items}
+    for name in _ORIGIN_HEADERS:
+        raw = lower.get(name)
+        if not raw:
+            continue
+        return str(raw).split(",")[0].strip()
+    return ""
+
+
+def resolve_ip_addresses(host: str) -> List[str]:
+    """把一个 bind 值（IP 字面量或主机名）解析成 IP 列表；解析不了返回空列表。"""
+    text = str(host or "").strip()
+    if not text or text in ("0.0.0.0", "::", "*"):
+        return []
+    try:
+        infos = socket.getaddrinfo(text, None)
+    except Exception:
+        return []
+    addresses: List[str] = []
+    for info in infos:
+        address = info[4][0]
+        if address not in addresses:
+            addresses.append(address)
+    return addresses
+
+
 @dataclass
 class DeviceConfig:
     name: str
@@ -866,6 +966,8 @@ class HubConfig:
         self.device_name = str(raw.get("device_name") or "KnowNote Hub (Termux)")
         self.device_id = str(raw.get("device_id") or "").strip() or ("hub-" + generate_key())
         self.bind = str(raw.get("bind") or "0.0.0.0")
+        # 只在局域网里服务（默认开）。关掉它意味着公网也能连 —— 那时只剩共享密钥把关。
+        self.lan_only = bool(raw.get("lan_only", True))
         # 端口显式写 0 时不能当成「没填」—— 0 是合法写法（让系统分配一个空闲端口，测试就用它）
         self.port = _int_or(raw.get("port"), SYNC_DEFAULT_PORT)
         self.key = str(raw.get("key") or "").strip()
@@ -909,6 +1011,37 @@ class HubConfig:
             return expanded
         return os.path.join(self.base_dir, expanded)
 
+    def lan_bind_problem(self) -> Optional[str]:
+        """lan_only 打开时，检查「当前要监听的地方到底在不在局域网里」。
+
+        返回问题描述；没问题返回 None。**只在确定不在局域网时才拦**：
+        判断不出来（解析不了主机名、枚举不到本机地址）一律放行，只记一条警告 ——
+        启动守卫的假警报比漏洞更烦人，真正的把关在每次请求上（`Hub.lan_check`）。
+        """
+        if not self.lan_only:
+            return None
+        text = str(self.bind or "").strip().strip("[]")
+        if text in ("", "0.0.0.0", "::", "*"):
+            # 通配地址：这时服务会挂在本机所有网卡上，按「本机有没有局域网地址」判断
+            addresses = [a for a in local_ipv4_addresses() if a]
+            if not addresses:
+                log("[warn] 枚举不到本机 IPv4 地址，跳过「有没有连局域网」这项启动检查（bind=%s）" % self.bind)
+                return None
+            if any(is_lan_address(a) for a in addresses):
+                return None
+            return ("本机地址 %s 都不在局域网网段（10/8、172.16/12、192.168/16…），看起来没连着局域网"
+                    % "、".join(addresses))
+        addresses = resolve_ip_addresses(text)
+        if not addresses:
+            log("[warn] 解析不了 bind=%r，跳过这项启动检查" % self.bind)
+            return None
+        if any(is_lan_address(a) for a in addresses):
+            if not all(is_lan_address(a) for a in addresses):
+                log("[warn] bind=%s 同时解析到局域网和公网地址（%s），只用了局域网那一部分"
+                    % (self.bind, "、".join(addresses)))
+            return None
+        return "bind 指向的不是局域网地址：%s（解析为 %s）" % (self.bind, "、".join(addresses))
+
 
 def example_config(port: int = SYNC_DEFAULT_PORT) -> dict:
     return {
@@ -918,6 +1051,11 @@ def example_config(port: int = SYNC_DEFAULT_PORT) -> dict:
         "bind": "0.0.0.0",
         "port": port,
         "key": generate_key(),
+        "lan_only": True,
+        "_lan_only_说明": ("只在局域网里服务（默认开）：来源网段不对的请求一律 403，"
+                           "隧道/反代进来的按 CF-Connecting-IP / X-Forwarded-For 里的真实来源判断；"
+                           "bind 指向公网地址或本机没连局域网时直接拒绝启动。"
+                           "确实要跨网段用才改成 false。"),
         "_key_说明": "设备要连本中心时用的共享密钥。建议与手机上的密钥一致。留空会拒绝启动。",
         "db": "knownote-hub.db",
         "images_dir": "images",
@@ -974,6 +1112,27 @@ class Hub:
                 self._log_file.flush()
 
     # ---------- 认证节流 ----------
+
+    def lan_check(self, peer_ip: str, headers) -> str:
+        """只在局域网里同步（v1.10.1）。返回拒绝理由；放行返回空串。
+
+        规则（两条都得满足）：
+          ① 直连的对端地址必须在局域网网段（公网直连、路由器端口映射在这里被拦下）；
+          ② 请求若带了代理头（CF-Connecting-IP / X-Real-IP / X-Forwarded-For），
+             头里那个「真实来源」也必须在局域网网段 —— 隧道会把连接说成来自 127.0.0.1，
+             真身在头里，只有这一条能挡住隧道。
+
+        注意顺序：**先看直连地址**。公网直连的请求即便伪造代理头也过不去；
+        只有直连地址本身是私有的（隧道 / 本机反代）才轮到第二代代理头来看。
+        """
+        if not self.config.lan_only:
+            return ""
+        if not is_lan_address(peer_ip):
+            return "直连地址 %s 不在局域网网段" % peer_ip
+        origin = claimed_origin(headers)
+        if origin and not is_lan_address(origin):
+            return "代理头里的真实来源 %s 不在局域网网段" % origin
+        return ""
 
     def auth_blocked(self, remote_ip: str) -> bool:
         with self._auth_lock:
@@ -1244,6 +1403,7 @@ class Hub:
             "protocol": SYNC_PROTOCOL,
             "device_id": self.config.device_id,
             "device_name": self.config.device_name,
+            "lan_only": self.config.lan_only,
             "db": self.store.db_path,
             "images_dir": self.images.path,
             "started_at": self.started_at,
@@ -1344,12 +1504,20 @@ class HubRequestHandler(BaseHTTPRequestHandler):
             self._error(body_error, "Request body too large or malformed")
             return
 
+        # 局域网限制（v1.10.1）：不在局域网的来源一律挡在门外，/ping 也不例外 ——
+        # 连「这台服务在不在」都不告诉外网。放在最前面，也就不占用错密钥的节流计数。
+        remote_ip = self.client_address[0] if self.client_address else "?"
+        blocked = self.hub.lan_check(remote_ip, self.headers)
+        if blocked:
+            self.hub.note("[warn] 拒绝局域网外的请求：%s（%s %s）" % (blocked, method, path))
+            self._error(403, "Refusing requests from outside the local network: %s" % blocked)
+            return
+
         if method == "GET" and path == "/ping":
             # 不需要密钥：用来把「地址填错 / 主机没开」和「密钥不对」区分开
             self._send_json(200, self.hub.handle_ping())
             return
 
-        remote_ip = self.client_address[0] if self.client_address else "?"
         if self.hub.auth_blocked(remote_ip):
             self._error(429, "Too many failed attempts; try again later",
                         {"Retry-After": str(int(AUTH_FAILURE_WINDOW))})
@@ -1467,6 +1635,8 @@ def cmd_init_config(path: str) -> int:
 def cmd_status(hub: Hub) -> int:
     counts = hub.store.counts()
     log("设备名：%s   标识：%s" % (hub.config.device_name, hub.config.device_id))
+    log("访问限制：%s" % ("只服务局域网来源（lan_only=true）" if hub.config.lan_only
+                       else "未限制来源网段（lan_only=false）"))
     log(
         "笔记 %d 条 / 回收站 %d 条 / 墓碑 %d 条 / 变更日志 %d 条；图片 %d 张"
         % (counts["notes"], counts["trashed"], counts["tombstones"], counts["change_log"],
@@ -1549,6 +1719,15 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         log("跑 python knownote_hub.py --init-config %s 生成一个，或用 --set-key 设置。" % config_path)
         return 2
 
+    problem = config.lan_bind_problem()
+    if problem:
+        log("拒绝启动：%s" % problem)
+        log("中心默认只在局域网里服务（配置项 lan_only，默认 true）：来源网段不对的请求一律 403，"
+            "经隧道/反代进来的还会按 CF-Connecting-IP / X-Forwarded-For 里的真实来源判断。")
+        log("先确认这台机器连的是家里/公司的局域网；确实要跨网段用（比如走隧道），"
+            "就在配置里写 \"lan_only\": false —— 但那时只剩共享密钥把关了。")
+        return 2
+
     hub = Hub(config)
 
     if args.check:
@@ -1578,6 +1757,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     hub.note("KnowNote 同步中心已启动")
     hub.note("  设备名 / 标识：%s / %s" % (config.device_name, config.device_id))
     hub.note("  共享密钥：%s" % config.key)
+    hub.note("  访问限制：%s" % ("只服务局域网来源（lan_only=true）" if config.lan_only
+                              else "未限制来源网段（lan_only=false）"))
     if httpd is not None:
         for address in local_ipv4_addresses():
             hub.note("  主机地址（手机里填这个）：http://%s:%d" % (address, config.port))

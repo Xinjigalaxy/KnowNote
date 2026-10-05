@@ -49,6 +49,8 @@ class SyncServer(
         val running: Boolean = false,
         val port: Int = SYNC_DEFAULT_PORT,
         val servedRequests: Int = 0,
+        /** 被局域网边界挡在门外的连接数（v1.10.1）。 */
+        val refusedPeers: Int = 0,
         val lastError: String? = null,
     )
 
@@ -102,6 +104,24 @@ class SyncServer(
                 sock.soTimeout = SOCKET_TIMEOUT_MS
                 val input = sock.getInputStream()
                 val output = sock.getOutputStream()
+
+                // 局域网边界（v1.10.1）：来连的地址不在局域网就拒了，连 /ping 都不答。
+                // 手机开着主机模式时，只要运营商给了公网 IPv6 或路由器做了端口映射，
+                // 外网就能连进来 —— 这条把它挡在门外（与中心侧 lan_only 同一套规矩）。
+                val peer = sock.inetAddress
+                if (peer != null && !LanAddress.isLan(peer)) {
+                    repo.logSync(
+                        SyncLogEntry(
+                            role = SyncLogEntry.ROLE_HOST,
+                            peer = peer.hostAddress ?: "?",
+                            ok = false,
+                            message = "refused: peer outside the local network",
+                        )
+                    )
+                    _status.update { it.copy(refusedPeers = it.refusedPeers + 1) }
+                    writeJson(output, 403, errorJson("Refusing a peer outside the local network"))
+                    return
+                }
 
                 val request = readRequest(input)
                 if (request == null) {

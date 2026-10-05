@@ -281,4 +281,8 @@
     <string name="workmanager_syncs_with_the_host_address_below">アプリが前面になくても、WorkManager が上のホストアドレスへ定期的に同期します。Android の最短周期は 15 分で、省電力モードではさらに遅れることがあります。Termux の同期ハブを使えば、サーバー側からもっと短い間隔で取りに来られます。</string>
     <string name="scheduled_auto_sync_is_on">定期の自動同期をオンにしました</string>
     <string name="scheduled_auto_sync_is_off">定期の自動同期をオフにしました</string>
+    <string name="sync_blocked_not_lan_network">同期を開始しませんでした：現在ローカルネットワークに接続されていません（モバイルデータ通信など）。Wi-Fi に接続してからやり直してください。</string>
+    <string name="sync_blocked_not_lan_peer">同期を開始しませんでした：%1$s はローカルネットワークのアドレスではありません。LAN のアドレスだけが使えます。</string>
+    <string name="refused_lan_peers_n">・LAN 外からの接続を %1$d 件拒否</string>
+    <string name="peers_and_this_device_must_be_on_the_same_lan">2 台の端末は同じローカルネットワークに接続してください：モバイルデータ通信では同期せず、ホストのアドレスがグローバルアドレスの場合も拒否されます。</string>
 </resources>

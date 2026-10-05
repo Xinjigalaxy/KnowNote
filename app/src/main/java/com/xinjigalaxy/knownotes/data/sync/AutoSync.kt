@@ -90,6 +90,17 @@ object AutoSync {
                 ListenableWorker.Result.success()
             },
             onFailure = { error ->
+                // 被局域网边界拦下（v1.10.1）不算「失败」：网络和对端本来就该在同一局域网，
+                // 现在只是不该同步而已。记一条「跳过」，并且**不能**返回 retry ——
+                // 手机在外面待几小时，退避重试会白耗电；周期任务本身到下个周期还会再来。
+                if (error is LanBlockedException) {
+                    prefs.saveAutoSyncResult(
+                        System.currentTimeMillis(),
+                        ok = false,
+                        message = "skipped: " + (error.message ?: "not on the local network"),
+                    )
+                    return@fold ListenableWorker.Result.success()
+                }
                 prefs.saveAutoSyncResult(
                     System.currentTimeMillis(),
                     ok = false,
@@ -120,13 +131,22 @@ object AutoSyncScheduler {
         }
         val period = minutes.coerceAtLeast(AutoSync.MIN_INTERVAL_MINUTES).toLong()
         val request = PeriodicWorkRequestBuilder<AutoSyncWorker>(period, TimeUnit.MINUTES)
-            // 没有网就等 —— 局域网同步没有网等于白跑，省一次唤醒
-            .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build())
+            // 只在**不计费的网络**上跑（Wi-Fi / 以太网）：笔记本记在移动数据上被推出去
+            // 正是这条规矩要防的事，索性连唤醒都不给它 —— 系统层直接拦住，比进了 doWork 再判断更省。
+            // 注意：约束是**排任务时定下的**，改了约束必须用 UPDATE 覆盖已有任务，
+            // 否则老设备上那份（CONNECTED）会一直生效 —— 见下面的 ExistingPeriodicWorkPolicy.UPDATE。
+            .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.UNMETERED).build())
             .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 1, TimeUnit.MINUTES)
             .build()
         workManager.enqueueUniquePeriodicWork(
             WORK_NAME,
-            if (force) ExistingPeriodicWorkPolicy.CANCEL_AND_REENQUEUE else ExistingPeriodicWorkPolicy.KEEP,
+            when {
+                // 用户刚改了开关 / 间隔：取消重排，新节拍立刻生效
+                force -> ExistingPeriodicWorkPolicy.CANCEL_AND_REENQUEUE
+                // 应用启动时的自愈补排：用 UPDATE 而不是 KEEP —— 已经排好的节拍不动，
+                // 但约束这类「规格」会被更新到最新（v1.10.0 用 KEEP，导致升级后约束改不掉）
+                else -> ExistingPeriodicWorkPolicy.UPDATE
+            },
             request,
         )
     }

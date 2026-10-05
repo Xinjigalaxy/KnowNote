@@ -281,4 +281,8 @@
     <string name="workmanager_syncs_with_the_host_address_below">应用不在前台也生效：WorkManager 按上面的主机地址定时同步一次。Android 最短周期是 15 分钟，省电模式下还可能被推迟；换成 Termux 上的同步中心，可以由服务器侧按更短的间隔主动来拉。</string>
     <string name="scheduled_auto_sync_is_on">已开启定时自动同步</string>
     <string name="scheduled_auto_sync_is_off">已关闭定时自动同步</string>
+    <string name="sync_blocked_not_lan_network">同步没有开始：当前不在局域网（比如用的是移动数据）。连上 Wi-Fi 再试。</string>
+    <string name="sync_blocked_not_lan_peer">同步没有开始：%1$s 不在局域网网段，只允许局域网地址。</string>
+    <string name="refused_lan_peers_n">· 已拒绝 %1$d 次局域网外的连接</string>
+    <string name="peers_and_this_device_must_be_on_the_same_lan">两台设备要在同一个局域网里：移动数据时不会同步，主机地址填成公网地址也会被拒绝。</string>
 </resources>

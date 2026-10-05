@@ -7,7 +7,9 @@ import com.xinjigalaxy.knownotes.data.model.SyncLogEntry
 import com.xinjigalaxy.knownotes.data.prefs.UiPrefs
 import com.xinjigalaxy.knownotes.data.repo.NoteRepository
 import com.xinjigalaxy.knownotes.data.sync.AutoSync
+import com.xinjigalaxy.knownotes.data.sync.LanBlockedException
 import com.xinjigalaxy.knownotes.data.sync.LanInfo
+import com.xinjigalaxy.knownotes.data.sync.LanScope
 import com.xinjigalaxy.knownotes.data.sync.SYNC_DEFAULT_PORT
 import com.xinjigalaxy.knownotes.data.sync.SyncClient
 import com.xinjigalaxy.knownotes.data.sync.SyncCoordinator
@@ -54,6 +56,8 @@ class SyncViewModel(
         val hostRunning: Boolean = false,
         val hostPort: Int = SYNC_DEFAULT_PORT,
         val servedRequests: Int = 0,
+        /** 被局域网边界挡在门外的连接数（v1.10.1）。 */
+        val refusedPeers: Int = 0,
         val hostError: String? = null,
         val hostAutoStart: Boolean = false,
         val peer: String = "",
@@ -80,6 +84,7 @@ class SyncViewModel(
             hostRunning = status.running,
             hostPort = status.port,
             servedRequests = status.servedRequests,
+            refusedPeers = status.refusedPeers,
             hostError = status.lastError,
             log = log,
             // 定时同步是后台跑的，页面上没有它的回调 —— 每次有同步日志发射（= 刚同步过）
@@ -188,6 +193,13 @@ class SyncViewModel(
             local.update { it.copy(message = UiMessage(R.string.invalid_host_address_e_g_192_168_1_20_or_192_168)) }
             return
         }
+        // 探测同样受局域网边界约束（v1.10.1）：地址填成公网的就当场说清楚，
+        // 别等探测「通了」、到同步时才被拦 —— 那个顺序最让人摸不着头脑。
+        val scope = coordinator.lanScopeOf(parsed.first)
+        if (scope != LanScope.LAN) {
+            local.update { it.copy(message = lanBlockedMessage(scope, parsed.first)) }
+            return
+        }
         local.update {
             it.copy(
                 busy = true,
@@ -266,17 +278,29 @@ class SyncViewModel(
                     }
                 }
                 .onFailure { e ->
+                    // 被局域网边界拦下是「用户能自己解决」的事，讲人话（不留英文技术串）
+                    val blocked = (e as? LanBlockedException)?.scope
                     local.update {
                         it.copy(
                             busy = false,
-                            message = UiMessage(
-                                R.string.sync_failed_e_message,
-                                listOf(e.message ?: e.javaClass.simpleName),
-                            ),
+                            message = if (blocked != null) {
+                                lanBlockedMessage(blocked, host)
+                            } else {
+                                UiMessage(
+                                    R.string.sync_failed_e_message,
+                                    listOf(e.message ?: e.javaClass.simpleName),
+                                )
+                            },
                         )
                     }
                 }
         }
+    }
+
+    /** 被局域网边界拦下时说给用户听的话（手动同步与探测共用一份）。 */
+    private fun lanBlockedMessage(scope: LanScope, host: String): UiMessage = when (scope) {
+        LanScope.NOT_LAN_PEER -> UiMessage(R.string.sync_blocked_not_lan_peer, listOf(host))
+        else -> UiMessage(R.string.sync_blocked_not_lan_network)
     }
 
     fun clearLog() {

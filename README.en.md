@@ -29,7 +29,7 @@ Notes + tags + groups, full-text search over the note body, Markdown preview, a 
 - **Never lose a note.** Long-press deletes, everything lands in Trash first, and cleanup is opt-in: WorkManager runs once a day, keeps 7/30/90 days, and reports back what it removed.
 - **Reads like notes should.** Tap = preview (Markdown rendered), long-press = edit. Only saves when you actually changed something.
 - **Sync between your own devices.** One device hosts, the others pull: incremental changes via a change log + watermark, timestamps decide conflicts, ties converge deterministically.
-- **Sync on a schedule.** Flip one switch and the phone pushes in the background (15/30/60/180 min); or run the bundled **sync hub on Termux** so the server side does the polling and the phone needs nothing running at all.
+- **Sync on a schedule.** Flip one switch and the phone pushes in the background (15/30/60/180 min); or run the bundled **sync hub on Termux** so the server side does the polling and the phone needs nothing running at all. Sync is **LAN-only**: it never starts on mobile data, a public peer address is refused, and the hub rejects any source outside your local network.
 
 ## Screenshots
 
@@ -47,11 +47,11 @@ Notes + tags + groups, full-text search over the note body, Markdown preview, a 
 # JDK 17 + Android SDK (point local.properties at your SDK; it is not committed)
 ./gradlew :app:assembleDebug            # app/build/outputs/apk/debug/app-debug.apk
 ./gradlew :app:installDebug             # install on a connected device
-./gradlew :app:testDebugUnitTest        # unit tests (55)
-./gradlew :app:connectedDebugAndroidTest # instrumented tests (47, needs a device/emulator)
+./gradlew :app:testDebugUnitTest        # unit tests (58)
+./gradlew :app:connectedDebugAndroidTest # instrumented tests (50, needs a device/emulator)
 
 # Sync hub (the server side; runs on Termux or any PC, Python 3 standard library only)
-python -m unittest discover -s server/tests -t .   # 29 hub tests, real sockets
+python -m unittest discover -s server/tests -t .   # 41 hub tests, real sockets
 python server/knownote_hub.py --init-config server/hub.conf.json   # write a config (random key)
 python server/knownote_hub.py --config server/hub.conf.json        # serve + poll devices on a timer
 ```
@@ -123,6 +123,19 @@ plain HTTP on the LAN, and a host without a key refuses to start. Requesting a n
 same Wi-Fi is possible; hiding its content until TLS lands is not. The host also has no foreground
 service in this version, so the process can be reclaimed by the system.
 
+**And sync is LAN-only (v1.10.1).** Three choke points, each at the only entrance:
+the app as a *client* never starts when the active network is not a local one (mobile data) or when the
+peer address is not in a private range — not a single request leaves the device; the app as a *host*
+answers 403 to any connection from outside the LAN (the page shows how many were refused); the hub
+(`lan_only`, on by default) rejects non-private sources and, for anything arriving through a tunnel or
+reverse proxy, judges the real origin in `CF-Connecting-IP` / `X-Real-IP` / `X-Forwarded-For`. A hub whose
+`bind` resolves only to public addresses — or a machine with no LAN address at all — refuses to start
+(exit code 2). The periodic job's network constraint is `UNMETERED`, so the phone is not even woken on
+cellular. Being blocked is reported as *skipped*: never `retry` (battery) and never `failure` (that would
+cancel the periodic work). Note the deliberate exclusion: carrier-grade NAT `100.64.0.0/10` counts as
+*outside* the LAN, because that is exactly where a phone on mobile data lives. This boundary filters by
+source network, not by identity — for confidentiality over an untrusted path you still need TLS.
+
 ### Scheduled sync: two places it can live
 
 | | On the phone (`data/sync/AutoSync.kt`) | On the hub (`server/knownote_hub.py`) |
@@ -157,22 +170,35 @@ bash start-hub.sh log | stop
 
 Also available: `--once` (one polling round then exit — cron / Termux:Boot friendly), `--status`,
 `--check`, `--port`, `--key`, `--print-key`. `hub.conf.json`, the database and `images/` are git-ignored
-(they hold your key and your notes). Boundaries: the hub keeps **no per-peer state** (who lacks which
-image is computed from what the peer advertises, so restarting or wiping it cannot make devices
-misremember), it requires a key to start, its transport is **plain HTTP** like the app host, and it is a
-single-process server — fine for a handful of devices, not a public relay.
+(they hold your key and your notes). Boundaries: the hub does keep its own copies — notes, change log,
+images, each device's watermark, its last sync result and a cache of what each peer last advertised; the
+cache is only a hint that saves a round, because every round re-reads what the peer advertises, so
+restarting or wiping the hub cannot make two devices misremember each other. It requires a key to start,
+**it serves the local network only** (`lan_only`, on by default: non-private sources get 403, tunnels are
+judged by the real origin header, and a public `bind` refuses to start), its transport is **plain HTTP**
+like the app host, and it is a single-process server — fine for a handful of devices, not a public relay.
 
 ## Verification
 
 | Check | Result |
 | --- | --- |
 | `assembleDebug` / `assembleRelease` | BUILD SUCCESSFUL |
-| Unit tests | 55/55 |
-| Instrumented tests (Android 13 / SQLite 3.32.2, emulator) | **47/47** (40 before; `AutoSyncTest` adds 7) |
-| Hub tests (`python -m unittest discover -s server/tests`) | **29/29**: protocol (401 / 404 / 429 throttle / bad JSON / protocol version over real HTTP), engine (increments, conflict convergence, tombstones, images sent once, multi-round), polling (two-way, idempotent, failure reasons, watermark = min clock), persisted device state |
+| Unit tests | **58/58** (55 before; `LanAddressTest` adds 3 — and writing it immediately caught that `[fd00::1]:8765`, the bracketed IPv6 form, was not handled: fixed) |
+| Instrumented tests (Android 13 / SQLite 3.32.2, emulator) | **50/50** (47 before) |
+| Instrumented tests (Android 15 / SQLite 3.44.3, emulator) | **50/50** |
+| LAN-only: "not a single request" is actually verified | the instrumented test asserts the **host received 0 requests**, not just the return value — an empty session also "succeeds", so asserting the result alone proves nothing |
+| LAN-only: *skipped*, never *retry* or *failure* | blocked runs return `success` and record `skipped:` — `retry` would burn battery backing off while away from home, `failure` would cancel the periodic work (the v1.10.0 pitfall) |
+| LAN-only: not even woken on cellular | the periodic work's constraint is asserted to be `NetworkType.UNMETERED`, and the self-heal enqueue now uses `UPDATE` (with `KEEP` the constraint already scheduled on an existing install never changes) |
+| LAN-only: a 403 changes nothing | note count and content hash are identical before and after a rejected request (not "answered 403 after writing") |
+| LAN-only: source judgement (hub) | direct public address → 403; public `CF-Connecting-IP` → 403; multi-hop `X-Forwarded-For` → first hop only; private addresses pass; `lan_only:false` passes; a public `bind` makes `main()` return 2 |
+| LAN-only: same address definition on both sides | RFC1918 + loopback + link-local + IPv6 (`::1`, `fc00::/7`, `fe80::/10`), and both sides **deliberately exclude** `100.64.0.0/10` — that is exactly where a phone on mobile data lives |
+| UI on the real tablet | the new hint under the client block and the host card's "refused N connections from outside the LAN" were both checked on the real tablet; four languages, no layout breakage |
+| Overwrite install (tablet, Android 16 / SDK 36) | 1.10.0 → 1.10.1 in place, backed up first: `user_version` 3 and every count (notes / tags / groups / change log) **identical**, the `notes` content hash unchanged, preference file and images byte-identical, `firstInstallTime` unchanged (only `lastUpdateTime` moved), the launch counter matches the real number of notes |
+| Real tunnel check (closest to "someone actually connecting from outside") | pointed the home Cloudflare tunnel (`example.com`) at the hub and hit it for real: with `lan_only:true`, `https://example.com/ping` returned **403**, the hub logging *refusing a request from outside the local network: the real origin in the proxy header, 203.0.113.7, is not on the local network*. The tunnel reports the connection as coming from 127.0.0.1 while the real client sits in `CF-Connecting-IP`, and that header is exactly what gets judged. With `lan_only:false` the same URL returned **200** — the control proving the rule, not something else, is what blocked it. Temp config deleted afterwards, the tunnel config is back to its original target |
+| Hub tests (`python -m unittest discover -s server/tests`) | **41/41**: protocol (401 / 404 / 429 throttle / bad JSON / protocol version over real HTTP), engine (increments, conflict convergence, tombstones, images sent once, multi-round), polling (two-way, idempotent, failure reasons, watermark = min clock), persisted device state, LAN-only enforcement (public sources and public peers behind proxy headers get 403 without touching any data, private sources pass, the switch turns it off, a public `bind` refuses to start) |
 | Cross-implementation ①: hub polls the app | hub `--check` → `✓ Android 模拟器, protocol 2`; one `--once` round **pulled 8 notes from the app and pushed 2 back**; app DB 8 → 10 notes with groups/tags matched by name |
 | Cross-implementation ②: app syncs to the hub | a note created on the hub appeared on the emulator after flipping the *Scheduled auto sync* switch (10 → **11 notes**, card shows "last auto sync: just now · success"); the app pushed its 10 notes and the hub applied 0 — idempotent convergence |
-| Hub tests **on a real Termux** (Android 11 手机, Termux's own Python 3.14.6, arm64) | **29/29 OK** — no dependencies, no compiling: `pkg install python`, then `python3 -m unittest discover -s tests -t .`, no root and not a single third-party package |
+| Hub tests **on a real Termux** (Android 11 手机, Termux's own Python 3.14.6, arm64) | **41/41 OK** — no dependencies, no compiling: `pkg install python`, then `python3 -m unittest discover -s tests -t .`, no root and not a single third-party package |
 | Cross-implementation ③: Termux hub ⇄ PC hub | both hubs see protocol 2; the Termux side pulled **12 notes** in one round and `0/0` the next (idempotent); `--status` shows `已同步过 …` |
 | Cross-implementation ④: Termux hub ⇄ the real app | the hub inside the phone's Termux reached the app (`Android 模拟器, protocol 2`), pulled 10 notes, then **pushed a note it had created itself** into the app (12 → 13 notes; the app's own sync log lists `Termux Hub (Android 11 手机) · 拉取 0 条 · 推送 1 条`). Full chain = Python in Termux on a real phone ⇄ a real Android app, over the same protocol |
 | Device state persisted for `--status` | the hub's `--status` (a separate process) reports `已同步过（…拉 11 / 推 0）` instead of the old always-"never synced" |
@@ -197,13 +223,14 @@ single-process server — fine for a handful of devices, not a public relay.
 | v1.7.0 | Per-page reading controls (size slider as a ratio, markdown ↔ raw text) and inline formatting in the editor (bold / italic / three sizes / six colours, stored as `<color>` / `<size>` tags in the plain body). The renderer now parses nested inline tokens — bold-outside-colour used to leak the tags as literal text. Unit tests 16 → **38** |
 | v1.8.0 | **Images in the note body**: pick from the gallery, copied into app-private storage (downscaled and re-encoded), referenced as `![caption](img:filename)`. The renderer splits content into text and image blocks so an image always occupies a full line of its own; summaries show `[caption]`. Known gap: images do not travel through export or LAN sync yet |
 | v1.9.0 | **Images join LAN sync**: protocol bumped to 2; images ride along with the notes in the same request (base64, max 6 images / 4 MB per batch) and oversized sets are split across rounds automatically. Each device remembers what the peer already has, so a file is sent once; sync log reports image counts |
-| v1.10.0 | **Scheduled auto sync + a Termux sync hub**: the sync page gains a *Scheduled auto sync* card (switch, four intervals, last result) and the phone can push its changes in the background via WorkManager. `server/knownote_hub.py` is a pure Python-3-standard-library sync hub that speaks the app's own protocol (v2), so it works as a plain host — *and* polls every configured device on `interval_seconds`, which puts the scheduling on the server side (the phone needs no background service at all). `start-hub.sh` covers start / background / wake-lock / status / logs. Sync sessions are serialised with a mutex so manual and scheduled runs never race the watermark, and per-device sync state is persisted so `--status` stays accurate from a separate process |
+| v1.10.1 | **LAN-only sync**: enforced in three places — the app as a client (never starts on mobile data or towards a public peer; not a single request leaves the device), the app as a host (a connection from outside the LAN gets 403, and the page shows how many were refused), and the hub (`lan_only`, on by default: non-private sources get 403, tunnels are judged by the real origin in `CF-Connecting-IP` / `X-Forwarded-For`, and a public `bind` or a machine with no LAN address refuses to start). The periodic job's network constraint tightened from *any network* to `UNMETERED`, and it now uses `UPDATE` so the new constraint actually replaces the one already scheduled on existing installs. Being blocked counts as *skipped*, never as retry or failure (a failing periodic job gets cancelled — the pitfall v1.10.0 documented). Four languages, unit + instrumented tests |
 
 ## Roadmap
 
 1. **Harden sync** — foreground service with a persistent notification for the host (less urgent now that the
    hub can poll devices on its own timer), TLS or a pre-shared key for confidentiality (both the app host
-   and the hub still speak plain HTTP), optional static addressing instead of typed-in IPs.
+   and the hub still speak plain HTTP — LAN-only filtering decides *where* traffic may go, not whether it
+   can be read in transit), optional static addressing instead of typed-in IPs.
 2. **Device discovery** — NSD/mDNS so the address box is not needed.
 3. **Conflict UX** — list which notes were resolved (and offer a "see the other side" view).
 4. **Export** — range selection (group/tag/time) and import.

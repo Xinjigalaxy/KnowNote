@@ -20,6 +20,11 @@ class SyncCoordinator(
     private val client: SyncClient,
     private val imageStore: ImageStore,
     private val prefs: UiPrefs,
+    /**
+     * 局域网判定（v1.10.1）。默认放行 —— 生产在 `AppContainer` 里注入真判定（`LanGuard`），
+     * 测试塞一个固定值就能把「被拦下」那条路真的跑一遍。
+     */
+    private val lanCheck: LanScopeCheck = LanScopeCheck { LanScope.LAN },
 ) {
 
     data class Session(
@@ -60,8 +65,28 @@ class SyncCoordinator(
     suspend fun syncWith(host: String, port: Int, key: String): Result<Session> =
         gate.withLock { syncSession(host, port, key) }
 
+    /** 局域网判定：同步会话与「探测主机」共用同一份，避免两处各判一套。 */
+    fun lanScopeOf(host: String): LanScope = lanCheck.scopeOf(host)
+
     private suspend fun syncSession(host: String, port: Int, key: String): Result<Session> {
         val peerKey = "$host:$port"
+        // 局域网边界（v1.10.1）：不在局域网就**不启动** —— 连一个请求都不发出去。
+        // 手动同步、定时自动同步都经过这里，所以这条规矩只有一处实现。
+        val scope = lanCheck.scopeOf(host)
+        if (scope != LanScope.LAN) {
+            val blocked = LanBlockedException(scope)
+            repo.logSync(
+                SyncLogEntry(
+                    role = SyncLogEntry.ROLE_CLIENT,
+                    peer = peerKey,
+                    pushed = 0,
+                    ok = false,
+                    message = blocked.message ?: "Sync blocked",
+                )
+            )
+            return Result.failure(blocked)
+        }
+
         var watermark = repo.lastSyncAt()
         // 笔记只在第一轮传：后面几轮纯粹是为了把图片传完
         var pendingNotes = engine.collectChanges(watermark)
