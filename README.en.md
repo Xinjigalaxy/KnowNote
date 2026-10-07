@@ -422,6 +422,8 @@ Limits:
 | Hub tests (PC) | 60/60 (10 new: subnet check, local subnet parsing, candidates ordered newest-first, capped at three, addresses other devices claim are skipped, walking down the ladder until one answers, every tried address listed when all fail, no guessing without history, self-reported name matching, failure-log throttling) |
 | Hub tests (real Termux, Android 11 / Python 3.14.6 / arm64) | 60/60 (22.7 s) |
 | Address learning (real data) | `--once` against a copy of the live hub store with the config left at the sample `192.168.1.7`: the off-subnet address is skipped and the three devices that had connected in are tried newest-first (none had host mode on at the time, so none answered) |
+| Real devices (metered hotspot) | Both test devices reported `Metered hint: true`, the condition that triggered the bug: after installing 1.10.3 and opening the app once, the job's constraints drop to `TIMING_DELAY` alone (was `TIMING_DELAY CONNECTIVITY` plus a `NOT_METERED` requirement), and a run completes with `sync_auto_last_ok = true` on both (36 notes pushed on one, 1 pulled on the other) |
+
 
 ## Changelog
 
