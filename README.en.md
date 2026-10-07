@@ -103,16 +103,12 @@ Taken on an emulator with demo data; the sync screen's key, device id and LAN ad
 | Build | JDK 17 + Android SDK; `local.properties` points at your SDK (not tracked) |
 | Install | Download the APK from [Releases](../../releases), or run `./gradlew :app:installDebug` |
 | Sync hub | `server/knownote_hub.py`, Python 3 standard library only |
-| Demo data | `tools/seed-demo-db.py` (optional, 8 sample notes) |
 
 ```bash
 export JAVA_HOME="/path/to/jdk17"
 ./gradlew :app:assembleDebug               # output: app/build/outputs/apk/debug/app-debug.apk
 ./gradlew :app:installDebug                # install to a connected device
-./gradlew :app:testDebugUnitTest           # JVM unit tests (62)
-./gradlew :app:connectedDebugAndroidTest   # instrumented tests (57, needs a device)
 
-python -m unittest discover -s server/tests -t .                   # hub tests (50, real sockets)
 python server/knownote_hub.py --init-config server/hub.conf.json   # generate a config (random key)
 python server/knownote_hub.py --config server/hub.conf.json        # run (also polls devices)
 ```
@@ -124,25 +120,10 @@ mainland China. To regenerate it:
 gradle wrapper --gradle-distribution-url https://mirrors.huaweicloud.com/gradle/gradle-8.13-bin.zip
 ```
 
-### Seeding demo data (optional)
-
-`tools/seed-demo-db.py` writes an SQLite file directly. Room uses WAL, so the `-wal` file must be pulled and
-checkpointed along with the database:
-
-```bash
-PKG=com.xinjigalaxy.knownotes.debug
-adb shell am force-stop $PKG
-mkdir -p seed/live && cd seed/live
-adb exec-out run-as $PKG cat databases/knownotes.db     > knownotes.db
-adb exec-out run-as $PKG cat databases/knownotes.db-wal > knownotes.db-wal
-python -c "import sqlite3;c=sqlite3.connect('knownotes.db');c.execute('PRAGMA wal_checkpoint(TRUNCATE)');c.close()"
-cd ../.. && python tools/seed-demo-db.py seed/live/knownotes.db
-adb push seed/live/knownotes.db /data/local/tmp/knownote-seed.db
-adb shell run-as $PKG rm -f databases/knownotes.db-wal databases/knownotes.db-shm
-adb shell run-as $PKG cp /data/local/tmp/knownote-seed.db databases/knownotes.db
-```
-
-The script skips the FTS index; the app rebuilds it when the row counts disagree (`FtsStore.repair()`).
+**This repository ships program source only**: development scripts, unit / instrumented tests and the demo
+seeding script are not included (`tools/`, `app/src/test`, `app/src/androidTest`, `app/schemas`, `server/tests`
+were removed from the repository and its history; they stay on the author's machine). The verification logs
+below are the results those tests produced.
 
 ## Code map
 
@@ -165,13 +146,11 @@ data/sync/AutoSync.kt        scheduled sync: WorkManager periodic work + schedul
 data/sync/LanGuard.kt        LAN boundary: address classification + network type check (injectable for tests)
 server/knownote_hub.py       sync hub: protocol 3 host side + device polling + SQLite / images
 server/start-hub.sh          Termux launcher (daemonise / wake-lock / check / status / log)
-server/tests/test_hub.py     hub tests (real sockets, 50 cases)
 ui/…                         Compose screens + ViewModels (hand-wired AppViewModelProvider)
 ui/components/UiMessage.kt   localisable messages from the ViewModel layer (resource id + args)
 data/settings/AppSettings.kt app settings (theme / dynamic color / trash cleanup / language) as a StateFlow
 data/settings/AppLocales.kt  locale handling: API 33+ uses LocaleManager, older versions wrap Configuration
 res/values{,-zh,-zh-rTW,-ja}/strings.xml  four-language resources
-tools/                       helper scripts: i18n extraction and fixes, screenshot redaction, demo seeding, history sanitising
 ```
 
 ## Android platform notes

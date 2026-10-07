@@ -101,16 +101,12 @@ MVVM + Repository；多设备在同一局域网内互相同步，另附可跑在
 | 构建环境 | JDK 17 + Android SDK；`local.properties` 指向本机 SDK 路径（不入库） |
 | 安装 | 从 [Releases](../../releases) 下载 APK，或 `./gradlew :app:installDebug` |
 | 同步中心 | `server/knownote_hub.py`，只用 Python 3 标准库 |
-| 演示数据 | `tools/seed-demo-db.py`（可选，8 条示例） |
 
 ```bash
 export JAVA_HOME="/path/to/jdk17"
 ./gradlew :app:assembleDebug               # 产物 app/build/outputs/apk/debug/app-debug.apk
 ./gradlew :app:installDebug                # 装到已连接设备
-./gradlew :app:testDebugUnitTest           # JVM 单测（62 例）
-./gradlew :app:connectedDebugAndroidTest   # 仪器化测试（57 例，需要设备 / 模拟器）
 
-python -m unittest discover -s server/tests -t .                   # 同步中心测试（50 例，真 socket）
 python server/knownote_hub.py --init-config server/hub.conf.json   # 生成配置（含随机密钥）
 python server/knownote_hub.py --config server/hub.conf.json        # 启动（同时定时轮询设备）
 ```
@@ -121,24 +117,9 @@ Gradle wrapper 的 `distributionUrl` 指向华为镜像：`services.gradle.org` 
 gradle wrapper --gradle-distribution-url https://mirrors.huaweicloud.com/gradle/gradle-8.13-bin.zip
 ```
 
-### 灌演示数据（可选）
-
-`tools/seed-demo-db.py` 直接写 SQLite 文件。Room 使用 WAL 模式，取库时必须连 `-wal` 一起取回并 checkpoint：
-
-```bash
-PKG=com.xinjigalaxy.knownotes.debug
-adb shell am force-stop $PKG
-mkdir -p seed/live && cd seed/live
-adb exec-out run-as $PKG cat databases/knownotes.db     > knownotes.db
-adb exec-out run-as $PKG cat databases/knownotes.db-wal > knownotes.db-wal
-python -c "import sqlite3;c=sqlite3.connect('knownotes.db');c.execute('PRAGMA wal_checkpoint(TRUNCATE)');c.close()"
-cd ../.. && python tools/seed-demo-db.py seed/live/knownotes.db
-adb push seed/live/knownotes.db /data/local/tmp/knownote-seed.db
-adb shell run-as $PKG rm -f databases/knownotes.db-wal databases/knownotes.db-shm
-adb shell run-as $PKG cp /data/local/tmp/knownote-seed.db databases/knownotes.db
-```
-
-脚本不写 FTS 索引表，App 下次启动按条数不一致自动重建（`FtsStore.repair()`）。
+**本仓库只放程序源码**：开发期脚本、单元 / 仪器化测试、演示数据灌库脚本都不在库内
+（`tools/`、`app/src/test`、`app/src/androidTest`、`app/schemas`、`server/tests`
+已从仓库与历史中移除，本机保留）。下文「验证记录」是这些测试跑出来的结果。
 
 ## 代码地图
 
@@ -161,13 +142,11 @@ data/sync/AutoSync.kt        定时自动同步：WorkManager 周期任务 + 排
 data/sync/LanGuard.kt        局域网边界：地址分类 + 网络类型判定（可注入给测试）
 server/knownote_hub.py       同步中心：协议 3 主机端 + 定时轮询设备 + SQLite / 图片
 server/start-hub.sh          Termux 启动脚本（后台 / wake-lock / check / status / log）
-server/tests/test_hub.py     同步中心测试（真实 socket，50 例）
 ui/…                         Compose 页面 + ViewModel（AppViewModelProvider 手工装配）
 ui/components/UiMessage.kt   ViewModel 侧可本地化消息（资源 id + 参数）
 data/settings/AppSettings.kt 应用设置（主题 / 动态取色 / 回收站清理 / 语言），StateFlow 承载
 data/settings/AppLocales.kt  语言落地：API 33+ 交系统 LocaleManager，低版本包 Configuration
 res/values{,-zh,-zh-rTW,-ja}/strings.xml  四语言文案
-tools/                      辅助脚本：i18n 抽取与修复、截图打码、演示数据灌库、历史脱敏
 ```
 
 ## Android 平台要点

@@ -160,13 +160,7 @@ python knownote_hub.py --config hub.conf.json --once
 
 ## 七、测试
 
-```bash
-# 仓库根目录
-python -m unittest discover -s server/tests -t . -v     # 50 个用例
-python server/tests/test_hub.py
-# Termux 内（验证零依赖）
-cd server && python3 -m unittest discover -s tests -t .
-```
+仓库只放中心的程序源码，**测试代码不在库内**（`server/tests` 已从仓库与历史中移除，本机保留）。
 
 覆盖：协议（`/ping`、错密钥 401、协议 426、坏 JSON 400、404、限流 429、无密钥拒绝启动）、
 引擎（增量、时间戳优先、打平收敛、墓碑不复活、未知 guid 的墓碑忽略）、

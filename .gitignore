@@ -52,9 +52,15 @@ __pycache__/
 # 注意：以下内容**必须**入库，不要加进 ignore
 #   gradle/wrapper/gradle-wrapper.jar   —— 没有它 clone 下来跑不了 ./gradlew
 #   gradle/wrapper/gradle-wrapper.properties
-#   app/schemas/**                      —— Room 导出的 schema，迁移要靠它比对
 #   docs/screenshots/**                 —— README 引用的界面截图（已脱敏）
 
 # 本机验证用的原始截图（只提交 docs/screenshots/ 里的脱敏图）
 # 注意写 shots* 而不是 shots*/ —— 带斜杠只匹配目录，shots180-x.png 这类文件会漏网
 shots*
+
+# --- 开发期辅助，不进公开仓库（只放程序源码）---
+/tools/
+/app/src/test/
+/app/src/androidTest/
+/app/schemas/
+/server/tests/
