@@ -276,9 +276,14 @@
     <string name="auto_sync_has_not_run_yet">自動同期はまだ実行されていません</string>
     <string name="auto_sync_ok">成功</string>
     <string name="auto_sync_failed">失敗</string>
+    <string name="auto_sync_task_scheduled">バックグラウンド処理：%1$d 分ごとに予約済み</string>
+    <string name="auto_sync_task_running">バックグラウンド処理：実行中</string>
+    <string name="auto_sync_task_finished">バックグラウンド処理：終了済み —— 定期処理がここで止まるのは異常です。スイッチを入れ直すと再登録できます</string>
+    <string name="auto_sync_task_not_scheduled">バックグラウンド処理：未登録 —— システムに保持されていません。スイッチを入れ直すと再登録できます</string>
+    <string name="auto_sync_overdue">前回の実行から間隔の 2 倍以上経っています（前回 %1$s）—— システムがバックグラウンド処理を抑えている可能性があります。電池の最適化から本アプリを除外してみてください</string>
     <string name="interval">間隔</string>
     <string name="every_minutes_min">%1$d 分</string>
-    <string name="workmanager_syncs_with_the_host_address_below">アプリが前面になくても、WorkManager が上のホストアドレスへ定期的に同期します。Android の最短周期は 15 分で、省電力モードではさらに遅れることがあります。Termux の同期ハブを使えば、サーバー側からもっと短い間隔で取りに来られます。</string>
+    <string name="workmanager_syncs_with_the_host_address_below">アプリが前面になくても、WorkManager が上のホストアドレスへ定期的に同期します。Android の最短周期は 15 分で、省電力モードではさらに遅れることがあります。ネットワーク種別の制限はなくなりました（旧版は「従量制でないネットワーク」を要求し、テザリング接続では一度も実行されませんでした）。Termux の同期ハブを使えば、サーバー側からもっと短い間隔で取りに来られます。</string>
     <string name="scheduled_auto_sync_is_on">定期の自動同期をオンにしました</string>
     <string name="scheduled_auto_sync_is_off">定期の自動同期をオフにしました</string>
     <string name="sync_blocked_not_lan_network">同期を開始しませんでした：現在ローカルネットワークに接続されていません（モバイルデータ通信など）。Wi-Fi に接続してからやり直してください。</string>

@@ -276,9 +276,14 @@
     <string name="auto_sync_has_not_run_yet">定时同步还没跑过</string>
     <string name="auto_sync_ok">成功</string>
     <string name="auto_sync_failed">失败</string>
+    <string name="auto_sync_task_scheduled">后台任务：已排程（每 %1$d 分钟）</string>
+    <string name="auto_sync_task_running">后台任务：正在执行</string>
+    <string name="auto_sync_task_finished">后台任务：已结束 —— 周期任务不该停在这里，把开关关掉再打开一次即可重排</string>
+    <string name="auto_sync_task_not_scheduled">后台任务：未排程 —— 系统没留住它，把开关关掉再打开一次即可重排</string>
+    <string name="auto_sync_overdue">距上次执行已超过两个间隔（上次 %1$s）—— 系统可能在压后台任务，试试把本应用加入电池优化白名单</string>
     <string name="interval">间隔</string>
     <string name="every_minutes_min">%1$d 分钟</string>
-    <string name="workmanager_syncs_with_the_host_address_below">应用不在前台也生效：WorkManager 按上面的主机地址定时同步一次。Android 最短周期是 15 分钟，省电模式下还可能被推迟；换成 Termux 上的同步中心，可以由服务器侧按更短的间隔主动来拉。</string>
+    <string name="workmanager_syncs_with_the_host_address_below">应用不在前台也生效：WorkManager 按上面的主机地址定时同步一次。Android 最短周期是 15 分钟，省电模式下还可能被推迟；不再限制网络类型（旧版要求「不计费网络」，连手机热点时任务一次都不会跑）。换成 Termux 上的同步中心，可以由服务器侧按更短的间隔主动来拉。</string>
     <string name="scheduled_auto_sync_is_on">已开启定时自动同步</string>
     <string name="scheduled_auto_sync_is_off">已关闭定时自动同步</string>
     <string name="sync_blocked_not_lan_network">同步没有开始：当前不在局域网（比如用的是移动数据）。连上 Wi-Fi 再试。</string>

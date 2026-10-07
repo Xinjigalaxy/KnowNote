@@ -7,6 +7,7 @@ import com.xinjigalaxy.knownotes.data.model.SyncLogEntry
 import com.xinjigalaxy.knownotes.data.prefs.UiPrefs
 import com.xinjigalaxy.knownotes.data.repo.NoteRepository
 import com.xinjigalaxy.knownotes.data.sync.AutoSync
+import com.xinjigalaxy.knownotes.data.sync.AutoSyncScheduler
 import com.xinjigalaxy.knownotes.data.sync.LanBlockedException
 import com.xinjigalaxy.knownotes.data.sync.LanInfo
 import com.xinjigalaxy.knownotes.data.sync.LanScope
@@ -20,6 +21,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
@@ -45,6 +47,11 @@ class SyncViewModel(
     private val deviceName: String,
     /** 排 / 撤定时任务。放在外面注入是因为 ViewModel 不该伸手去拿 Context（与回收站清理同款）。 */
     private val scheduleAutoSync: (enabled: Boolean, minutes: Int, force: Boolean) -> Unit = { _, _, _ -> },
+    /**
+     * 查定时任务在系统里的状态（v1.10.3）。同样注入：ViewModel 不碰 Context。
+     * 界面要用它回答「任务到底排上了没有」—— v1.10.2 的问题是这里完全不可见。
+     */
+    private val autoSyncState: suspend () -> AutoSyncScheduler.State = { AutoSyncScheduler.State.NOT_SCHEDULED },
 ) : ViewModel() {
 
     data class UiState(
@@ -65,12 +72,14 @@ class SyncViewModel(
         val busy: Boolean = false,
         val message: UiMessage? = null,
         val log: List<SyncLogEntry> = emptyList(),
-        // ---- 定时自动同步（v1.10.0） ----
+        // ---- 定时自动同步（v1.10.0；任务状态 v1.10.3） ----
         val autoSyncEnabled: Boolean = false,
         val autoSyncIntervalMinutes: Int = 30,
         val autoSyncLastAt: Long = 0L,
         val autoSyncLastOk: Boolean = false,
         val autoSyncLastMessage: String = "",
+        /** 周期任务在系统里的状态；`NOT_SCHEDULED` 而开关是开的，就说明系统没排上。 */
+        val autoSyncTaskState: AutoSyncScheduler.State = AutoSyncScheduler.State.NOT_SCHEDULED,
     )
 
     private val local = MutableStateFlow(UiState())
@@ -111,6 +120,18 @@ class SyncViewModel(
         }
         viewModelScope.launch {
             local.update { it.copy(lastSyncAt = repo.lastSyncAt()) }
+        }
+        refreshAutoSyncState()
+        // 后台跑完一次同步、或任务被系统撤掉，页面上都要跟着变：同步日志一发射就重查一次状态。
+        viewModelScope.launch {
+            repo.observeSyncLog().collect { refreshAutoSyncState() }
+        }
+    }
+
+    /** 重查周期任务在系统里的状态（v1.10.3）。 */
+    fun refreshAutoSyncState() {
+        viewModelScope.launch {
+            local.update { it.copy(autoSyncTaskState = autoSyncState()) }
         }
     }
 
@@ -318,6 +339,7 @@ class SyncViewModel(
     fun setAutoSyncEnabled(enabled: Boolean) {
         prefs.saveAutoSyncEnabled(enabled)
         scheduleAutoSync(enabled, local.value.autoSyncIntervalMinutes, true)
+        refreshAutoSyncState()
         local.update {
             it.copy(
                 autoSyncEnabled = enabled,
@@ -341,6 +363,7 @@ class SyncViewModel(
                     autoSyncLastMessage = prefs.autoSyncLastMessage(),
                 )
             }
+            refreshAutoSyncState()
         }
     }
 
@@ -349,6 +372,7 @@ class SyncViewModel(
         val value = minutes.coerceAtLeast(AutoSync.MIN_INTERVAL_MINUTES)
         prefs.saveAutoSyncIntervalMinutes(value)
         scheduleAutoSync(local.value.autoSyncEnabled, value, true)
+        refreshAutoSyncState()
         local.update { it.copy(autoSyncIntervalMinutes = value) }
     }
 

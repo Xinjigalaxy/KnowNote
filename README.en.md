@@ -263,6 +263,7 @@ note back. All lists, searches and counters filter `is_purged=1`, and the deleti
 | Minimum interval | 15 minutes (Android's floor), deferred under battery optimisation | Configurable, default 60 seconds |
 | Requirements | Host address and key configured; the peer need not be running | The device runs host mode and its app process is alive |
 | Switch | "Scheduled auto sync" card in the sync screen | `interval_seconds` in the config |
+| Visibility | The card shows "Background job: scheduled every N min / running now / not scheduled", and warns when the last run is more than two intervals old (battery or background restrictions) | `start-hub.sh status` shows each device's last result and the address it last connected from |
 
 Both can be enabled at once since syncing is idempotent. Two implementation points:
 
@@ -270,6 +271,11 @@ Both can be enabled at once since syncing is idempotent. Two implementation poin
 - Manual and scheduled syncs share one watermark, so `SyncCoordinator` serialises sessions with a mutex
 
 Toggling the switch performs one run immediately along the same path, which surfaces a wrong address at once.
+
+When the peer is on a **different subnet** from this device (v1.10.3), the failure names both subnets instead of
+Android's `failed to connect to /192.168.1.7 ... after 4000ms`: a campus `10.x` and a home
+`192.168.x` are both private, so the addresses alone give nothing away. The check only concludes when it can
+be sure — a hostname or a device whose interfaces cannot be enumerated is left alone.
 
 ### LAN-only (v1.10.1)
 
@@ -283,12 +289,19 @@ LAN definition (identical on both sides): RFC1918 (10/8, 172.16/12, 192.168/16) 
 (169.254/16), and IPv6 `::1` / `fc00::/7` / `fe80::/10`. Carrier-grade NAT `100.64.0.0/10` is **deliberately
 excluded** — that is where a phone on mobile data lives.
 
-Device side also sets a system-level constraint: the periodic work requires an `UNMETERED` network. The
-constraint is fixed when the work is scheduled, so changing it requires `ExistingPeriodicWorkPolicy.UPDATE`;
-`KEEP` never updates existing work.
+The device side sets **no network-type constraint** (v1.10.3). v1.10.2 required `UNMETERED`, which a phone
+hotspot or any Wi-Fi the system marks metered never satisfies — the periodic work sat in "waiting for
+constraints" and never ran once (`WorkSpec.period_count = 0`, JobScheduler reporting
+`Unsatisfied constraints: CONNECTIVITY`) while the UI kept showing a timestamp frozen at the moment the switch
+was flipped. LAN sync costs no mobile data anyway, and what actually needs blocking — "the peer is not on the
+same LAN" — is handled by the guards below. Constraints are fixed when the work is scheduled, so changing them
+requires `ExistingPeriodicWorkPolicy.UPDATE`; `KEEP` never updates existing work.
 
 A blocked run counts as "skipped": it logs `skipped:` and returns `success`. Returning `retry` would make the
 phone back off and retry on mobile data, and `failure` would cancel the periodic work.
+**Failures do not back off either** (v1.10.3): `retry()`'s exponential backoff pushes the next attempt hours
+away (v1.10.2's behaviour), while the periodic work would come back on its own next interval — `success` is
+more punctual.
 
 The hub adds a start-up guard: if `bind` resolves to public addresses only, or the machine has no LAN address at
 all, it prints the reason and exits with code 2; when it cannot tell, it only warns.
@@ -302,6 +315,15 @@ Two roles:
 
 1. **Host**: `GET /ping` + `POST /sync`, identical to the app's wire format (protocol 3), so entering "hub address + key" in the app works with no code changes
 2. **Poller**: connects to each configured device every `interval_seconds` (the device must run host mode)
+3. **Address learning** (v1.10.3): when a configured address is unreachable, the hub walks the addresses that
+   device last connected from, newest first, up to three. An exact match on the self-reported name recorded by an
+   earlier successful sync comes first, then the configured name, then a lone candidate not claimed by another
+   device; when nothing matches it simply tries them newest-first — mismatched names are the norm (the config
+   says "the bedroom one", the device reports its model name) and every candidate is an already-paired device of your own,
+   so a wrong try costs seconds. A configured address outside every local subnet is skipped instead of being left
+   to time out, and each round logs which addresses were tried and which one answered. The start-up
+   banner and `--status` name any off-subnet configured address, and identical repeated failures stop flooding
+   the log (first 3, then every 12th)
 
 Python 3 standard library only (`http.server` / `sqlite3` / `threading` / `base64`) — no dependencies, no
 compiling; on Termux, `pkg install python` is enough.
@@ -389,6 +411,18 @@ Limits:
 | Real devices: PC hub ⇄ real app | The app named 2 notes in `want_guids` and received them (verified inside the app's database: `user_version` 3, both rows, `sync_log` reading `host · 推 2`), then a steady `0/0` in 1 round |
 | The LAN guard was not relaxed | On an emulator with only mobile data the app logged `Sync blocked: the device is not on a local network (mobile data?)` and sent nothing |
 
+### v1.10.3 (scheduled sync never firing)
+
+| Check | Result |
+| --- | --- |
+| Evidence | Device side: WorkSpec `period_count = 0`, JobScheduler `Unsatisfied constraints: CONNECTIVITY`, current network `Metered hint: true`. Hub side: 520/520 polls timed out, `last_ok_at = 0` |
+| Three root causes | (1) the periodic work required `UNMETERED`, which a phone hotspot or a metered Wi-Fi never satisfies, so it never ran once; (2) failures returned `retry()`, whose exponential backoff pushed the next attempt hours away; (3) the hub was configured with the sample address `192.168.1.7`, outside its own subnet |
+| Unit tests | 65/65 (new `LanSubnetTest`, 3 cases: subnet comparison by real prefix length, no false alarm when undecidable, the note names both sides) |
+| Instrumented tests | Android 13, 59/59 (4 new: no network-type constraint, job state is queryable, an off-subnet peer is recorded as `skipped:` with a readable reason, failures no longer ask for a backoff) |
+| Hub tests (PC) | 60/60 (10 new: subnet check, local subnet parsing, candidates ordered newest-first, capped at three, addresses other devices claim are skipped, walking down the ladder until one answers, every tried address listed when all fail, no guessing without history, self-reported name matching, failure-log throttling) |
+| Hub tests (real Termux, Android 11 / Python 3.14.6 / arm64) | 60/60 (22.7 s) |
+| Address learning (real data) | `--once` against a copy of the live hub store with the config left at the sample `192.168.1.7`: the off-subnet address is skipped and the three devices that had connected in are tried newest-first (none had host mode on at the time, so none answered) |
+
 ## Changelog
 
 | Version | Notes |
@@ -409,10 +443,11 @@ Limits:
 | v1.10.0 | Scheduled sync (device-side WorkManager) + Termux hub (standard library only, can poll devices); sync sessions serialised; device state persisted |
 | v1.10.1 | LAN-only (client / host / hub all guard), periodic work constrained to `UNMETERED` and switched to `UPDATE` |
 | v1.10.2 | Two-way inventory diff (protocol 3): requests and responses carry the full inventory, both ends run the same pure diff, bodies are sent by `want_guids`, the watermark is demoted to a shortcut |
+| v1.10.3 | Fix "scheduled sync never fires": the device side drops the `UNMETERED` constraint (on a hotspot or metered Wi-Fi the job never ran), failures no longer back off, and the card shows the job state plus an overdue warning; cross-subnet failures explain themselves; the hub learns device addresses, validates subnets and throttles repeated failure logs |
 
 ## Roadmap
 
-1. **Sync hardening**: a foreground Service for the host (with a notification) to stay resident; TLS or pre-shared-key encryption against LAN sniffing; a configurable static address for cross-network use
+1. **Sync hardening**: a foreground Service for the host (with a notification) to stay resident; TLS or pre-shared-key encryption against LAN sniffing
 2. **Discovery**: NSD / mDNS so the host address need not be typed
 3. **Conflict UX**: list resolved conflicts in the sync log and offer "view peer version"
 4. **Search**: evaluate a bundled SQLite (`requery/sqlite-android`) to enable FTS5 and custom tokenisers as data grows

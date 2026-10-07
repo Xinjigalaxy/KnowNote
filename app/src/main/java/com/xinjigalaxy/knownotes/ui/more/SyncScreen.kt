@@ -51,6 +51,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.xinjigalaxy.knownotes.data.model.SyncLogEntry
 import com.xinjigalaxy.knownotes.data.sync.AutoSync
+import com.xinjigalaxy.knownotes.data.sync.AutoSyncScheduler
 import com.xinjigalaxy.knownotes.ui.AppViewModelProvider
 import com.xinjigalaxy.knownotes.ui.components.formatTime
 import com.xinjigalaxy.knownotes.ui.components.rendered
@@ -276,6 +277,39 @@ fun SyncScreen(
                                 } else {
                                     MaterialTheme.colorScheme.outline
                                 },
+                            )
+                        }
+                    }
+                    // 任务到底排上了没有（v1.10.3）：v1.10.2 的问题正是这里完全不可见 ——
+                    // 手机上开关明明开着，任务其实因为「不计费网络」那条约束一次都没执行过。
+                    if (state.autoSyncEnabled) {
+                        val healthy = state.autoSyncTaskState == AutoSyncScheduler.State.SCHEDULED ||
+                            state.autoSyncTaskState == AutoSyncScheduler.State.RUNNING
+                        Text(
+                            text = when (state.autoSyncTaskState) {
+                                AutoSyncScheduler.State.SCHEDULED ->
+                                    stringResource(R.string.auto_sync_task_scheduled, state.autoSyncIntervalMinutes)
+                                AutoSyncScheduler.State.RUNNING -> stringResource(R.string.auto_sync_task_running)
+                                AutoSyncScheduler.State.FINISHED -> stringResource(R.string.auto_sync_task_finished)
+                                AutoSyncScheduler.State.NOT_SCHEDULED -> stringResource(R.string.auto_sync_task_not_scheduled)
+                            },
+                            style = MaterialTheme.typography.labelSmall,
+                            color = if (healthy) MaterialTheme.colorScheme.outline else MaterialTheme.colorScheme.error,
+                        )
+                        // 超过两倍间隔没执行过：正常的周期任务不该差这么多，多半是系统在压它
+                        // （省电模式 / 后台限制 / 电池优化），告诉用户去哪儿放开。
+                        val overdue = state.autoSyncLastAt > 0L &&
+                            System.currentTimeMillis() - state.autoSyncLastAt >
+                            2L * state.autoSyncIntervalMinutes * 60_000L
+                        if (overdue) {
+                            Text(
+                                text = stringResource(
+                                    R.string.auto_sync_overdue,
+                                    formatTime(state.autoSyncLastAt),
+                                    state.autoSyncIntervalMinutes,
+                                ),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.error,
                             )
                         }
                     }

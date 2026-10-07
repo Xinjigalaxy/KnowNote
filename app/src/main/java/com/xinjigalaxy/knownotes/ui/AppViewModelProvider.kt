@@ -53,6 +53,7 @@ object AppViewModelProvider {
                 scheduleAutoSync = { enabled, minutes, force ->
                     AutoSyncScheduler.apply(app(), enabled, minutes, force)
                 },
+                autoSyncState = { AutoSyncScheduler.state(app()) },
             )
         }
     }

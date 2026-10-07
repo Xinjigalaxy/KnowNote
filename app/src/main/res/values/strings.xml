@@ -279,9 +279,14 @@
     <string name="auto_sync_has_not_run_yet">Auto sync has not run yet</string>
     <string name="auto_sync_ok">ok</string>
     <string name="auto_sync_failed">failed</string>
+    <string name="auto_sync_task_scheduled">Background job: scheduled every %1$d min</string>
+    <string name="auto_sync_task_running">Background job: running now</string>
+    <string name="auto_sync_task_finished">Background job: finished — a periodic job should not end up here; toggle the switch off and on to reschedule</string>
+    <string name="auto_sync_task_not_scheduled">Background job: not scheduled — the system did not keep it; toggle the switch off and on to reschedule</string>
+    <string name="auto_sync_overdue">Last run was more than two intervals ago (%1$s) — the system may be holding background work back; try excluding this app from battery optimization</string>
     <string name="interval">Interval</string>
     <string name="every_minutes_min">%1$d min</string>
-    <string name="workmanager_syncs_with_the_host_address_below">WorkManager syncs with the host address above on a timer, even when the app is closed. Android enforces a 15-minute minimum and may delay it in Doze. A Termux sync hub can poll this device instead, on its own tighter schedule.</string>
+    <string name="workmanager_syncs_with_the_host_address_below">WorkManager syncs with the host address above on a timer, even when the app is closed. Android enforces a 15-minute minimum and may delay it in Doze. It no longer requires an unmetered network (older versions did, which silently stopped it from ever running on a phone hotspot). A Termux sync hub can poll this device instead, on its own tighter schedule.</string>
     <string name="scheduled_auto_sync_is_on">Scheduled auto sync is on</string>
     <string name="scheduled_auto_sync_is_off">Scheduled auto sync is off</string>
     <string name="sync_blocked_not_lan_network">Sync did not start: this device is not on a local network right now (mobile data?). Connect to Wi-Fi and try again.</string>

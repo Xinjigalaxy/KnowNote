@@ -1,15 +1,14 @@
 package com.xinjigalaxy.knownotes.data.sync
 
 import android.content.Context
-import androidx.work.BackoffPolicy
-import androidx.work.Constraints
 import androidx.work.CoroutineWorker
 import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.ListenableWorker
-import androidx.work.NetworkType
 import androidx.work.PeriodicWorkRequestBuilder
+import androidx.work.WorkInfo
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
+import androidx.work.await
 import com.xinjigalaxy.knownotes.KnowNoteApp
 import com.xinjigalaxy.knownotes.data.prefs.UiPrefs
 import java.util.concurrent.TimeUnit
@@ -89,24 +88,18 @@ object AutoSync {
                 ListenableWorker.Result.success()
             },
             onFailure = { error ->
-                // 被局域网边界拦下（v1.10.1）不算「失败」：网络和对端本来就该在同一局域网，
-                // 现在只是不该同步而已。记一条「跳过」，并且**不能**返回 retry ——
-                // 手机在外面待几小时，退避重试会白耗电；周期任务本身到下个周期还会再来。
-                if (error is LanBlockedException) {
-                    prefs.saveAutoSyncResult(
-                        System.currentTimeMillis(),
-                        ok = false,
-                        message = "skipped: " + (error.message ?: "not on the local network"),
-                    )
-                    return@fold ListenableWorker.Result.success()
+                // 「不该同步」与「同步失败」要分开记（v1.10.3）：
+                // 被局域网边界拦下（v1.10.1）、或对端与本机不在同一个局域网（v1.10.3）
+                // 都不是故障 —— 换个网络自然会好，用户只需要知道原因。
+                val message = when (error) {
+                    is LanBlockedException -> "skipped: " + (error.message ?: "not on the local network")
+                    is OffLanException -> "skipped: " + (error.message ?: "peer is on another network")
+                    else -> error.message ?: error.javaClass.simpleName
                 }
-                prefs.saveAutoSyncResult(
-                    System.currentTimeMillis(),
-                    ok = false,
-                    message = error.message ?: error.javaClass.simpleName,
-                )
-                // 失败就按退避重试（网络刚切走、主机还没起、密钥还没改对都会走到这里）
-                ListenableWorker.Result.retry()
+                prefs.saveAutoSyncResult(System.currentTimeMillis(), ok = false, message = message)
+                // 失败**不**返回 retry（v1.10.3）：周期任务到下个周期自己会再来，而 retry 的
+                // 指数退避会把下一次推到几小时后 —— 那正是「开着自动同步却半天不动」的来源之一。
+                ListenableWorker.Result.success()
             },
         )
     }
@@ -118,9 +111,24 @@ object AutoSyncScheduler {
     /** 唯一任务名（测试要按它查任务在不在，所以是 public）。 */
     const val WORK_NAME = "knownote-auto-sync"
 
+    /** 周期任务在系统里的状态（界面显示用）。 */
+    enum class State {
+        /** 没排上（开关关着，或被系统的配额 / 后台限制清掉了）。 */
+        NOT_SCHEDULED,
+
+        /** 已排上，正等下一个周期。 */
+        SCHEDULED,
+
+        /** 此刻正在执行。 */
+        RUNNING,
+
+        /** 任务已结束（失败 / 被取消）—— 周期任务不该停在这里。 */
+        FINISHED,
+    }
+
     /**
      * @param force 用户刚在界面上改了开关或间隔时传 true（取消重排，新间隔立刻生效）；
-     *        应用启动时的自愈补排传 false（用 KEEP，不打断已经排好的节拍）。
+     *        应用启动时的自愈补排传 false（用 UPDATE，不打断已经排好的节拍）。
      */
     fun apply(context: Context, enabled: Boolean, minutes: Int, force: Boolean = false) {
         val workManager = WorkManager.getInstance(context.applicationContext)
@@ -129,14 +137,15 @@ object AutoSyncScheduler {
             return
         }
         val period = minutes.coerceAtLeast(AutoSync.MIN_INTERVAL_MINUTES).toLong()
-        val request = PeriodicWorkRequestBuilder<AutoSyncWorker>(period, TimeUnit.MINUTES)
-            // 只在**不计费的网络**上跑（Wi-Fi / 以太网）：笔记本记在移动数据上被推出去
-            // 正是这条规矩要防的事，索性连唤醒都不给它 —— 系统层直接拦住，比进了 doWork 再判断更省。
-            // 注意：约束是**排任务时定下的**，改了约束必须用 UPDATE 覆盖已有任务，
-            // 否则老设备上那份（CONNECTED）会一直生效 —— 见下面的 ExistingPeriodicWorkPolicy.UPDATE。
-            .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.UNMETERED).build())
-            .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 1, TimeUnit.MINUTES)
-            .build()
+        // **不设网络约束**（v1.10.3）。
+        //
+        // v1.10.2 及以前要求 UNMETERED（不计费网络），出发点是不想在移动数据上把笔记推出去。
+        // 实际后果是：手机热点、被系统标成计费的 Wi-Fi 全都不是「不计费网络」，任务永远处于
+        // 「等约束满足」，一次都不执行，而界面上只留一个停在开关那一刻的时间 —— 查了两台设备
+        // 的 WorkSpec（period_count=0）与 JobScheduler（Unsatisfied constraints: CONNECTIVITY）
+        // 才看出原因。局域网直连本来就不产生流量费用，真正该拦的是「对端不在同一个局域网」，
+        // 那由 LanGuard / OffLan 判定负责（会明确告诉用户原因），不该交给系统的网络类型约束。
+        val request = PeriodicWorkRequestBuilder<AutoSyncWorker>(period, TimeUnit.MINUTES).build()
         workManager.enqueueUniquePeriodicWork(
             WORK_NAME,
             when {
@@ -149,4 +158,26 @@ object AutoSyncScheduler {
             request,
         )
     }
+
+    /**
+     * 查周期任务现在是什么状态。界面用它回答「到底排上了没有」——
+     * v1.10.2 的问题正是这里完全不可见。
+     */
+    suspend fun state(context: Context): State =
+        WorkManager.getInstance(context.applicationContext)
+            .getWorkInfosForUniqueWork(WORK_NAME)
+            .await()
+            .firstOrNull()
+            ?.state
+            ?.let { info ->
+                when (info) {
+                    WorkInfo.State.ENQUEUED, WorkInfo.State.BLOCKED -> State.SCHEDULED
+                    WorkInfo.State.RUNNING -> State.RUNNING
+                    // 被 cancelUniqueWork 撤掉的任务，WorkManager 会把那条记录留在库里（状态 CANCELLED）——
+                    // 从「排上了没有」的角度看它就是「没排上」，别显示成「已结束」吓人。
+                    WorkInfo.State.CANCELLED -> State.NOT_SCHEDULED
+                    else -> State.FINISHED
+                }
+            }
+            ?: State.NOT_SCHEDULED
 }

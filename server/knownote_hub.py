@@ -65,6 +65,8 @@ SYNC_PROTOCOL = 3
 MAX_SYNC_IMAGES = 6
 MAX_SYNC_IMAGE_BYTES = 4 * 1024 * 1024
 MAX_ROUNDS = 5
+# 地址自学习（v1.10.3）：配置地址连不上时，最多再按「最近接入过」的顺序试这么多个地址
+MAX_LEARNED_TRIES = 3
 SYNC_DEFAULT_PORT = 8765
 
 # 服务端自己的上限：一次 HTTP 请求体最多多少字节（协议上限约 4MB 图片 + 笔记 JSON）
@@ -1066,6 +1068,92 @@ def claimed_origin(headers) -> str:
     return ""
 
 
+def _iface_networks() -> List[Tuple[str, int]]:
+    """本机各网卡的 IPv4 地址 + 前缀长度（Linux / Termux 下用 ioctl 问内核）。
+
+    Windows 上没有 `fcntl`，这里直接返回空表 → 调用方退回到「按 /24 估」（见 `local_ipv4_networks`）。
+    中心要能同时跑在 Termux 与 PC 上，所以这条路径不能抛异常。
+    """
+    try:
+        import fcntl
+        import struct
+    except Exception:
+        return []
+
+    results: List[Tuple[str, int]] = []
+    try:
+        names = [name for _, name in socket.if_nameindex()]
+    except Exception:
+        return results
+    for name in names:
+        if name == "lo":
+            continue
+        try:
+            probe = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            request = struct.pack("256s", name[:15].encode())
+            address = socket.inet_ntoa(fcntl.ioctl(probe.fileno(), 0x8915, request)[20:24])   # SIOCGIFADDR
+            mask = socket.inet_ntoa(fcntl.ioctl(probe.fileno(), 0x891b, request)[20:24])      # SIOCGIFNETMASK
+            probe.close()
+        except Exception:
+            continue
+        if not address or address.startswith("127."):
+            continue
+        prefix = bin(int.from_bytes(socket.inet_aton(mask), "big")).count("1")
+        if (address, prefix) not in results:
+            results.append((address, prefix))
+    return results
+
+
+def local_ipv4_networks() -> List[Tuple[str, int]]:
+    """本机网段（地址 + 前缀长度）。拿不到前缀就按 /24 估 —— 家用网基本都是 /24。
+
+    回环 `127.0.0.0/8` 永远算「本机网段」：配置里写 `127.0.0.1` 时那台设备就在这台机器上，
+    不能被当成「地址抄错了」而换址。
+    """
+    networks = _iface_networks()
+    if not networks:
+        networks = [(address, 24) for address in local_ipv4_addresses()]
+    networks = [item for item in networks if item[0] != "127.0.0.1"]
+    return [("127.0.0.1", 8)] + networks
+
+
+def in_local_subnet(host: str, networks: Optional[List[Tuple[str, int]]] = None) -> Optional[bool]:
+    """对端地址落不落在本机某个网段里。
+
+    `True` / `False` 是确定的结论，`None` 表示判不了（对端写成域名、或本机网卡信息取不到）——
+    判不了的时候调用方**不能**当成「不在」，否则会把一次正常同步说成配置错误。
+    """
+    networks = local_ipv4_networks() if networks is None else networks
+    text = str(host).split(":")[0].strip()
+    try:
+        peer = ipaddress.ip_address(text)
+    except ValueError:
+        return None
+    if peer.version != 4 or not networks:
+        return None
+    for address, prefix in networks:
+        try:
+            if peer in ipaddress.ip_network("%s/%d" % (address, prefix), strict=False):
+                return True
+        except ValueError:
+            continue
+    return False
+
+
+def _ago(milliseconds: int) -> str:
+    """把时间戳说成「多久以前」（日志用）。"""
+    if not milliseconds:
+        return "时间未知"
+    seconds = max(0, int((now_ms() - int(milliseconds)) / 1000))
+    if seconds < 90:
+        return "刚刚"
+    if seconds < 3600:
+        return "%d 分钟前" % (seconds // 60)
+    if seconds < 86400:
+        return "%d 小时前" % (seconds // 3600)
+    return "%d 天前" % (seconds // 86400)
+
+
 def resolve_ip_addresses(host: str) -> List[str]:
     """把一个 bind 值（IP 字面量或主机名）解析成 IP 列表；解析不了返回空列表。"""
     text = str(host or "").strip()
@@ -1206,12 +1294,15 @@ def example_config(port: int = SYNC_DEFAULT_PORT) -> dict:
         "interval_seconds": 300,
         "_interval_说明": "定时轮询间隔（秒）。中心每这么久主动连一次下面列出的设备。最小 30。",
         "poll_on_start": True,
+        "_devices_说明": ("要定时轮询的设备（设备侧要开着『主机模式』）。地址填错不会静默失败："
+                          "中心启动时会提示「不在本机网段」，并在每次轮询时改用它最近一次主动连进来的地址。"),
         "devices": [
             {
                 "name": "我的平板",
                 "host": "192.168.1.7",
                 "port": SYNC_DEFAULT_PORT,
-                "_host_说明": "在手机的『局域网同步』页可以看到本机地址；设备需开着主机模式。",
+                "_host_说明": ("样例地址，**必须**改成设备在『局域网同步』页显示的真实地址；"
+                               "设备需开着主机模式。地址不在本机网段时，中心会改用该设备最近接入过的地址。"),
                 "key": "",
                 "_key_说明": "留空表示与顶层 key 相同。",
                 "enabled": True,
@@ -1234,6 +1325,8 @@ class Hub:
         self.engine = SyncEngine(self.store, self.images)
         self.client = HubClient()
         self.device_stats: Dict[str, dict] = {}
+        # 连续失败的「上一次原因」：同样一条错误不该每 5 分钟往日志和 sync_log 里塞一份（v1.10.3）
+        self._fail_seen: Dict[str, str] = {}
         self._auth_failures: Dict[str, List[float]] = {}
         self._auth_lock = threading.Lock()
         log_path = config.resolve(config.log_file) if config.log_file else None
@@ -1363,9 +1456,15 @@ class Hub:
 
     # ---------- 轮询设备（中心作为请求方，设备开着 App 内嵌主机） ----------
 
-    def poll_device(self, device: DeviceConfig) -> dict:
-        """与 App 的 SyncCoordinator 同一条流程：取增量 → 发 → 落库 → 水位线 → 日志。"""
+    def poll_device(self, device: DeviceConfig, host: Optional[str] = None,
+                    port: Optional[int] = None) -> dict:
+        """与 App 的 SyncCoordinator 同一条流程：取增量 → 发 → 落库 → 水位线 → 日志。
+
+        [host] / [port] 不给就用配置里的地址；给了就用它（地址自学习换地址时走这条，见 `poll_all`）。
+        """
         peer_key = device.address
+        target_host = host or device.host
+        target_port = port or device.port
         stats = self.device_stats.setdefault(
             peer_key,
             {
@@ -1408,7 +1507,7 @@ class Hub:
                 images=images,
             )
             code, text = self.client.request(
-                device.host, device.port, "/sync", "POST", request.to_json(), device.key
+                target_host, target_port, "/sync", "POST", request.to_json(), device.key
             )
             if code is None:
                 return self._fail(stats, peer_key, device, rounds, "unreachable: %s" % text)
@@ -1482,6 +1581,10 @@ class Hub:
             }
         )
         self.store.save_device_state(stats)
+        # 记下这台设备自称的名字（v1.10.3）：地址变了以后，靠它把「配置里的条目」
+        # 和「最近从某个地址连进来的人」对上，实现地址自学习。
+        self.store.kv_set("alias:" + peer_key, peer_name or device.name)
+        self._fail_seen.pop(peer_key, None)
         self.store.log_sync(
             role="poll",
             peer="%s (%s)" % (peer_name, peer_key),
@@ -1503,12 +1606,80 @@ class Hub:
         stats["failures"] = stats.get("failures", 0) + 1
         stats["last_error"] = reason
         self.store.save_device_state(stats)
-        self.store.log_sync(
-            role="poll", peer="%s (%s)" % (device.name, peer_key), ok=False,
-            message="%s (round %d)" % (reason, rounds),
-        )
-        self.note("[poll] %s 同步失败：%s" % (device.label, reason))
+        # 同一台设备一直连不上时（配置地址抄错、设备关机、不在同一网络），
+        # 日志与同步历史不该每 5 分钟塞一条一模一样的（v1.10.2 攒了 500 多条同样的超时）：
+        # 前 3 次照记（用户刚改完配置时要看得到），之后每 12 次（≈1 小时）记一次，原因变了立刻记。
+        failures = int(stats["failures"])
+        reason_changed = self._fail_seen.get(peer_key) != reason
+        self._fail_seen[peer_key] = reason
+        if failures <= 3 or failures % 12 == 0 or reason_changed:
+            self.store.log_sync(
+                role="poll", peer="%s (%s)" % (device.name, peer_key), ok=False,
+                message="%s (round %d, 连续失败 %d 次)" % (reason, rounds, failures),
+            )
+            self.note("[poll] %s 同步失败：%s（连续 %d 次）" % (device.label, reason, failures))
         return {"ok": False, "device": device.label, "error": reason}
+
+    def _learned_candidates(self, device: DeviceConfig) -> List[Tuple[str, int, str]]:
+        """按可信度从高到低给出「可以试着连过去」的地址（地址自学习，v1.10.3）。
+
+        中心本来就把每个入站客户端记成 `client:<ip>` 一行（见 `store.device_states()`），
+        也就是「谁最近从哪个地址来过」一直是有账可查的；v1.10.2 却只认配置文件里的那一行，
+        配置值抄错（比如抄了样例里的 `192.168.1.7`）就永远轮询不到任何东西、日志里刷满超时。
+
+        阶梯顺序：① 上次成功同步时记下的自称名（`alias:`）② 与配置里的名字一致
+        ③ 只剩一个没被别的设备占用的候选 ④ 其余候选按最近接入时间排。
+
+        第 ④ 档不如前三档精确（配置里写「卧室那台」、设备自报型号名这种对不上的情况，
+        只能走到这一档），但 `client:` 行都是**已经连进来过、密钥对得上的自家设备**，
+        不会把陌生主机拉进来；每轮最多试 `MAX_LEARNED_TRIES` 个，试了哪些、成没成都写进日志。
+        都对不上就**不猜** —— 宁可报连不上，也不要拿别的设备顶上。
+        """
+        candidates = [
+            (int(stats.get("last_ok_at") or 0), key.split(":", 1)[1], str(stats.get("name") or ""))
+            for key, stats in self.store.device_states().items()
+            if key.startswith("client:")
+        ]
+        if not candidates:
+            return []
+        candidates.sort(reverse=True)
+        alias = str(self.store.kv_get("alias:" + device.address, "") or "").strip().lower()
+        wanted = {name.strip().lower() for name in (device.name, alias) if name.strip()}
+
+        def describe(seen_at: int, name: str) -> str:
+            return "%s · %s接入过" % (name or "?", _ago(seen_at))
+
+        ladder: List[Tuple[str, int, str]] = []
+        for seen_at, ip, name in candidates:
+            if name.strip().lower() in wanted:
+                ladder.append((ip, device.port, describe(seen_at, name)))
+        taken = {other.host for other in self.config.devices if other is not device}
+        spare = [item for item in candidates
+                 if item[1] not in taken and item[1] not in {step[0] for step in ladder}]
+        if len(spare) == 1:
+            seen_at, ip, name = spare[0]
+            ladder.append((ip, device.port, describe(seen_at, name)))
+        else:
+            for seen_at, ip, name in spare[:MAX_LEARNED_TRIES]:
+                ladder.append((ip, device.port, describe(seen_at, name)))
+        return ladder
+
+    def _learned_address(self, device: DeviceConfig) -> Optional[Tuple[str, int, str]]:
+        """阶梯上第一个候选（`--status` / `--check` 只展示这一条）。"""
+        ladder = self._learned_candidates(device)
+        return ladder[0] if ladder else None
+
+    def _endpoint_for(self, device: DeviceConfig, networks=None) -> Tuple[str, int, Optional[str]]:
+        """这一轮连哪儿：配置地址在本机网段内就用它；明显不在（抄错 / 跨网段）直接换成学到的地址。
+
+        返回 (host, port, 换址说明)；说明为 None 表示用的是配置里的地址。
+        [networks] 只为测试注入（正常传 None，表示真去问本机网卡）。
+        """
+        if in_local_subnet(device.host, networks) is False:
+            learned = self._learned_address(device)
+            if learned:
+                return learned[0], learned[1], learned[2]
+        return device.host, device.port, None
 
     def poll_all(self) -> List[dict]:
         self.last_poll_started_at = now_ms()
@@ -1517,7 +1688,7 @@ class Hub:
             if not device.enabled:
                 continue
             try:
-                results.append(self.poll_device(device))
+                results.append(self._poll_one(device))
             except Exception as error:  # 单台设备出问题不能拖垮整轮
                 results.append({"ok": False, "device": device.label, "error": repr(error)})
                 self.note("[poll] %s 异常：%r" % (device.label, error))
@@ -1525,13 +1696,70 @@ class Hub:
         self.polls += 1
         return results
 
+    def _poll_plan(self, device: DeviceConfig) -> List[Tuple[str, int]]:
+        """这一轮依次要试的地址（配置地址 → 学到的候选阶梯）。
+
+        配置地址明显不在本机网段时（抄错 / 跨网段）不白等那次连接超时，直接走候选；
+        候选一个都不剩时仍然照试配置地址一次，好把系统原话带给用户。
+        """
+        off_subnet = in_local_subnet(device.host) is False
+        plan: List[Tuple[str, int]] = [] if off_subnet else [(device.host, device.port)]
+        for host, port, _why in self._learned_candidates(device):
+            if host != device.host:
+                plan.append((host, port))
+        return plan or [(device.host, device.port)]
+
+    def _poll_one(self, device: DeviceConfig) -> dict:
+        """一台设备的一轮：按 `_poll_plan` 依次试，第一个连上的就用它。
+
+        全部候选都连不上时，错误里写清试过哪几个地址，而不是只报第一个。
+        """
+        off_subnet = in_local_subnet(device.host) is False
+        ladder = [item for item in self._learned_candidates(device) if item[0] != device.host]
+        plan = self._poll_plan(device)
+
+        if off_subnet:
+            self.note("[poll] %s 的配置地址 %s 不在本机网段，改按最近接入过的地址试（%d 个候选）"
+                      % (device.label, device.address, len(ladder)))
+        elif ladder:
+            self.note("[poll] %s 用 %s 连不上，改按最近接入过的地址试（%d 个候选）"
+                      % (device.label, device.address, len(ladder)))
+
+        why_by_host = {host: why for host, _port, why in ladder}
+        result = None
+        for host, port in plan:
+            if host in why_by_host:
+                self.note("[poll] %s 试 %s:%d（候选：%s）" % (device.label, host, port, why_by_host[host]))
+            result = self.poll_device(device, host, port)
+            if result.get("ok"):
+                if (host, port) != (device.host, device.port):
+                    # 结果里写清这一轮实际连的是谁（日志 / --status 一眼能看出换了地址）
+                    result["device"] = "%s → %s:%d" % (device.label, host, port)
+                return result
+        if len(plan) > 1:
+            tried = "、".join("%s:%d" % (host, port) for host, port in plan)
+            result["error"] = "%s；也试过 %s，仍连不上" % (result.get("error"), tried)
+        return result
+
     def check_devices(self) -> None:
         """--check：只测连通性，不改任何数据（同时验证密钥）。"""
         if not self.config.devices:
             self.note("配置里没有任何设备（devices 为空）")
             return
         for device in self.config.devices:
-            code, text = self.client.request(device.host, device.port, "/ping", "GET")
+            host, port, switched = self._endpoint_for(device)
+            if switched is not None:
+                self.note("[check] %s 的配置地址 %s 不在本机网段，改用 %s:%d（%s）"
+                          % (device.label, device.address, host, port, switched))
+            code, text = self.client.request(host, port, "/ping", "GET")
+            if code is None:
+                # 配置地址连不上 —— 再按「最近接入过的地址」试一次（地址自学习，v1.10.3）
+                learned = self._learned_address(device)
+                if learned and (learned[0], learned[1]) != (host, port):
+                    self.note("[check] %s 用 %s:%d 连不上（%s），改用最近接入过的 %s:%d 再试"
+                              % (device.label, host, port, text, learned[0], learned[1]))
+                    code, text = self.client.request(learned[0], learned[1], "/ping", "GET")
+                    host, port = learned[0], learned[1]
             if code is None:
                 self.note("[check] %s ✗ 连不上（%s）—— 设备是否开机、同一 Wi-Fi、App 里开着主机模式？"
                           % (device.label, text))
@@ -1548,8 +1776,8 @@ class Hub:
                 self.note("[check] %s ✓ 通，但协议版本是 %s（中心要求 %d）—— 两边 App 版本不一致"
                           % (device.label, protocol, SYNC_PROTOCOL))
                 continue
-            self.note("[check] %s ✓ 通（对端自称 %s，协议 %d）"
-                      % (device.label, payload.get("device_name"), protocol))
+            self.note("[check] %s ✓ 通（%s:%d，对端自称 %s，协议 %d）"
+                      % (device.label, host, port, payload.get("device_name"), protocol))
 
     # ---------- 状态 ----------
 
@@ -1801,6 +2029,9 @@ def cmd_status(hub: Hub) -> int:
     log("设备名：%s   标识：%s" % (hub.config.device_name, hub.config.device_id))
     log("访问限制：%s" % ("只服务局域网来源（lan_only=true）" if hub.config.lan_only
                        else "未限制来源网段（lan_only=false）"))
+    networks = local_ipv4_networks()
+    if networks:
+        log("本机网段：%s" % "、".join("%s/%d" % item for item in networks))
     log(
         "笔记 %d 条 / 回收站 %d 条 / 墓碑 %d 条 / 变更日志 %d 条；图片 %d 张"
         % (counts["notes"], counts["trashed"], counts["tombstones"], counts["change_log"],
@@ -1810,7 +2041,13 @@ def cmd_status(hub: Hub) -> int:
     configured = set()
     for device in hub.config.devices:
         configured.add(device.address)
-        log("设备 %s：%s" % (device.label, describe_device(persisted.get(device.address, {}))))
+        line = "设备 %s：%s" % (device.label, describe_device(persisted.get(device.address, {})))
+        learned = hub._learned_address(device)
+        if learned:
+            line += "；最近一次接入过的地址：%s:%d（%s）" % (learned[0], learned[1], learned[2])
+        if in_local_subnet(device.host, networks) is False:
+            line += "；注意：配置地址不在本机网段，轮询会改用上面那个地址"
+        log(line)
     for address, stats in sorted(persisted.items()):
         # 主机角色接待过的客户端（对方主动连过来，不在 devices 配置里）
         if address in configured or not address.startswith("client:"):
@@ -1928,6 +2165,15 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             hub.note("  主机地址（手机里填这个）：http://%s:%d" % (address, config.port))
     else:
         hub.note("  主机接口：未开启（--no-serve）")
+    networks = local_ipv4_networks()
+    if networks:
+        hub.note("  本机网段：%s" % "、".join("%s/%d" % item for item in networks))
+    for device in config.devices:
+        if in_local_subnet(device.host, networks) is False:
+            hub.note("  [注意] 设备 %s 的地址 %s 不在本机任何网段 —— 按配置轮询必然连不上。"
+                     "中心会改用这台设备最近接入过的地址；若它从未主动连过，"
+                     "请在 App 里打开主机模式，或把配置里的地址改成它的实际地址。"
+                     % (device.label, device.host))
     hub.note("  数据库：%s   图片：%s" % (hub.store.db_path, hub.images.path))
     hub.note("  数据：笔记 %d 条、墓碑 %d 条、变更 %d 条"
              % (hub.store.counts()["notes"], hub.store.counts()["tombstones"], hub.store.counts()["change_log"]))

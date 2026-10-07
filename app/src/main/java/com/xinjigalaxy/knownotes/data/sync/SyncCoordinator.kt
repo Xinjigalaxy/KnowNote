@@ -4,8 +4,10 @@ import com.xinjigalaxy.knownotes.data.media.ImageStore
 import com.xinjigalaxy.knownotes.data.model.SyncLogEntry
 import com.xinjigalaxy.knownotes.data.prefs.UiPrefs
 import com.xinjigalaxy.knownotes.data.repo.NoteRepository
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 
 /**
  * 一次完整的「从机同步」会话：取本地增量 → 发给主机 → 落库远端增量 → 记水位线与日志。
@@ -25,6 +27,11 @@ class SyncCoordinator(
      * 测试塞一个固定值就能把「被拦下」那条路真的跑一遍。
      */
     private val lanCheck: LanScopeCheck = LanScopeCheck { LanScope.LAN },
+    /**
+     * 「对端与本机不在同一个网段」时的说明（v1.10.3）。默认用真判定（枚举本机网卡比对），
+     * 测试注入一个固定值就能把「不在同一个网里」那条路真的跑一遍。
+     */
+    private val offLanNote: (String) -> String? = { LanSubnet.mismatchNote(it) },
 ) {
 
     data class Session(
@@ -122,17 +129,25 @@ class SyncCoordinator(
             )
             val response = outcome.response
             if (response == null) {
-                val reason = outcome.error ?: "Unknown error"
+                // 对端与本机不在同一个网段时（v1.10.3），「连不上」的真正原因就是「不在一个网里」：
+                // 把系统那句 `failed to connect to /192.168.1.7 ... after 4000ms` 换成看得懂的说明。
+                // 枚举网卡要读系统接口，放到 IO 线程上做。
+                val offLan = withContext(Dispatchers.IO) { offLanNote(host) }
+                val error: Throwable = if (offLan != null) {
+                    OffLanException(offLan)
+                } else {
+                    IllegalStateException(outcome.error ?: "Unknown error")
+                }
                 repo.logSync(
                     SyncLogEntry(
                         role = SyncLogEntry.ROLE_CLIENT,
                         peer = "$host:$port",
                         pushed = notesToPush,
                         ok = false,
-                        message = reason,
+                        message = error.message ?: "Unknown error",
                     )
                 )
-                return Result.failure(IllegalStateException(reason))
+                return Result.failure(error)
             }
 
             peerName = response.deviceName

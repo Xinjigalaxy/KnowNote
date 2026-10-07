@@ -156,3 +156,77 @@ class LanGuard(private val context: Context) : LanScopeCheck {
         return !capabilities.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR)
     }
 }
+
+/** 对端与本机不在同一个网段（v1.10.3）—— 上层按「跳过」记，不按故障记。 */
+class OffLanException(message: String) : IllegalStateException(message)
+
+/**
+ * 「对端和我在不在同一个网段」（v1.10.3）。
+ *
+ * [LanAddress] 只回答「是不是私有地址」：校园网的 `10.x` 与家里的 `192.168.x` 都算局域网，
+ * 于是平板在学校连家里的中心时判定放行、请求真的发出去，最后只拿到一句
+ * `failed to connect to /192.168.1.7 (port 8765) ... after 4000ms` —— 用户看不出
+ * 「你俩根本不在一个网里」。这里补上那层判断，把失败原因换成人话。
+ *
+ * **只在能确定时才下结论**：对端写成域名、或本机地址枚举不到，一律返回「不知道」，
+ * 不改错因、不拦请求 —— 判定错了把正常同步说成故障，比不说更糟。
+ * 也**不用**它去提前拦截：手机侧可能挂着代理（Clash 之类），LAN 流量未必从枚举到的网卡出去。
+ */
+object LanSubnet {
+
+    /** 本机一个网卡地址 + 前缀长度。 */
+    data class Local(val address: String, val prefix: Int)
+
+    /** 本机全部 IPv4 地址（枚举不到就返回空表）。 */
+    fun localAddresses(): List<Local> = runCatching {
+        java.util.Collections.list(java.net.NetworkInterface.getNetworkInterfaces())
+            .filter { it.isUp && !it.isLoopback }
+            .flatMap { nic ->
+                nic.interfaceAddresses.mapNotNull { entry ->
+                    val bytes = entry.address.address
+                    if (bytes.size != 4) null else Local(entry.address.hostAddress.orEmpty(), entry.networkPrefixLength.toInt())
+                }
+            }
+            .distinct()
+    }.getOrNull() ?: emptyList()
+
+    /** 对端是否与本机某个网段同网段。判定不了（域名 / 枚举不到本机地址）返回 true。 */
+    fun sameSubnet(peerHost: String, locals: List<Local> = localAddresses()): Boolean {
+        val peer = literalV4(peerHost) ?: return true
+        if (locals.isEmpty()) return true
+        return locals.any { inSubnet(peer, literalV4(it.address) ?: return@any false, it.prefix) }
+    }
+
+    /**
+     * 不在同一网段时给用户的一句话；同网段或判定不了返回 null。
+     * 文案是英文：与 `LanBlockedException` 等诊断信息保持一致（同步日志里本就是这一套）。
+     */
+    fun mismatchNote(peerHost: String, locals: List<Local> = localAddresses()): String? {
+        if (sameSubnet(peerHost, locals)) return null
+        val mine = locals.joinToString(", ") { "${it.address}/${it.prefix}" }
+        return "peer $peerHost is on a different subnet (this device: $mine) — put both on the same Wi-Fi"
+    }
+
+    /** 只认 IPv4 字面量（可带 `:端口`）；域名返回 null。 */
+    private fun literalV4(host: String): ByteArray? {
+        var text = host.trim().removePrefix("[").substringBefore("]").substringBefore("/")
+        if (text.count { it == ':' } == 1 && text.contains('.')) text = text.substringBefore(":")
+        if (!Regex("^\\d{1,3}(\\.\\d{1,3}){3}$").matches(text)) return null
+        val parts = text.split(".").map { it.toIntOrNull() ?: return null }
+        if (parts.any { it !in 0..255 }) return null
+        return ByteArray(4) { parts[it].toByte() }
+    }
+
+    private fun inSubnet(peer: ByteArray, local: ByteArray, prefix: Int): Boolean {
+        val bits = prefix.coerceIn(0, 32)
+        var left = bits
+        for (index in 0 until 4) {
+            if (left <= 0) return true
+            val take = minOf(8, left)
+            val mask = (0xFF shl (8 - take)) and 0xFF
+            if ((peer[index].toInt() and mask) != (local[index].toInt() and mask)) return false
+            left -= take
+        }
+        return true
+    }
+}
